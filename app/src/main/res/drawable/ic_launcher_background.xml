@@ -1,10 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fundo do icone: o mesmo degrade vermelho do logo original, amostrado dele
+  (#F30402 no topo, #A10202 na base). Fica full-bleed atras da camada branca,
+  entao qualquer mascara do launcher (circulo, squircle, quadrado) mostra
+  vermelho ate a borda.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:pathData="M0,0h108v108h-108z"
-        android:fillColor="#18181B" />
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="0"
+                android:endX="54"
+                android:endY="108"
+                android:type="linear">
+                <item android:offset="0" android:color="#FFF30402" />
+                <item android:offset="1" android:color="#FFA10202" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>
