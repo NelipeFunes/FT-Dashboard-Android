@@ -8,31 +8,51 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import br.dev.ftdash.data.SourceKind
-import br.dev.ftdash.ui.dash.components.BarGauge
-import br.dev.ftdash.ui.dash.components.FlagChip
-import br.dev.ftdash.ui.dash.components.GearIndicator
-import br.dev.ftdash.ui.dash.components.RpmBar
-import br.dev.ftdash.ui.dash.components.SpeedReadout
+import br.dev.ftdash.ui.dash.components.FtBigValue
+import br.dev.ftdash.ui.dash.components.FtChannel
+import br.dev.ftdash.ui.dash.components.FtGear
+import br.dev.ftdash.ui.dash.components.FtRpmBar
+import br.dev.ftdash.ui.dash.components.FtStatusBox
+import br.dev.ftdash.ui.dash.components.FtTankGauge
+import br.dev.ftdash.ui.dash.components.FtVerticalGauge
 import br.dev.ftdash.ui.dash.components.StatusBar
-import br.dev.ftdash.ui.dash.components.ValueTile
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.Red500
 import br.dev.ftdash.ui.theme.Zinc100
+import br.dev.ftdash.ui.theme.Zinc800
 import br.dev.ftdash.ui.theme.Zinc950
 import kotlin.math.abs
 
 /**
- * O painel, em paisagem.
+ * O painel, no layout do mostrador da própria FuelTech.
  *
- * Layout: barra de RPM no topo ocupando a largura toda; embaixo, três colunas —
- * marcha e velocidade à esquerda, os canais de acerto no centro, a saúde do
- * motor à direita; barra de status no rodapé.
+ * ```
+ * 8000 RPM  [======= degradê amarelo → vermelho =======]
+ *            1  2  3  4  5  6  7  8  9  10
+ * ─────────────┬──────────────┬──────────────────────────
+ *  Odômetro    │   Marcha     │      Veloc.
+ *  Total       │      5       │      112
+ *  Parcial     │              │      Kmh
+ * ─────────────┴──────────────┴──────────────────────────
+ *  T.Motor  P.Óleo  Lambda  P.Comb  T.Ar  Ponto  Malha  Inj
+ * ────────────────────────────────────────────────────────
+ *  Tanque [=========]      MAP  TPS  Lenta   CUTOFF
+ * ────────────────────────────────────────────────────────
+ *  diagnóstico (fonte, Hz, CRC, layout, GPS)
+ * ```
+ *
+ * O que a FT mostra e a telemetria não traz virou outra coisa: o odômetro é
+ * integrado do GPS, o tanque sai do duty dos bicos, e o espaço da memória do
+ * datalogger foi para canais que a ECU manda de verdade.
  *
  * Cada composable filho recebe **primitivos**, não o [DashUiState] inteiro: é o
  * que permite ao Compose pular a recomposição dos mostradores cujo número não
@@ -43,6 +63,8 @@ fun DashScreen(
     state: DashUiState,
     onOpenCalibration: () -> Unit,
     onToggleSource: () -> Unit,
+    onResetTrip: () -> Unit,
+    onFillTank: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -50,161 +72,138 @@ fun DashScreen(
             .fillMaxSize()
             .background(Zinc950),
     ) {
-        RpmBar(
+        FtRpmBar(
             rpm = state.rpm,
             peakRpm = state.peakRpm,
-            redlineRpm = state.redlineRpm,
             shiftRpm = state.shiftRpm,
             maxRpm = state.maxRpm,
             hasData = state.hasData,
         )
 
+        Divider()
+
+        // ── Odômetro · Marcha · Velocidade ──
         Row(
             Modifier
-                .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .weight(0.46f)
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Coluna esquerda: o que o motorista olha de relance.
-            Column(
-                Modifier
-                    .weight(0.26f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                GearIndicator(
-                    gear = state.gear,
-                    calibrated = state.gearCalibrated,
-                    onLongPress = onOpenCalibration,
-                    modifier = Modifier.weight(1f),
-                )
-                SpeedReadout(
-                    kmh = state.speedKmh,
-                    origin = state.speedOrigin,
-                )
-            }
+            OdometerPanelSlot(state, onResetTrip)
+            Spacer(Modifier.weight(0.06f))
+            FtGear(
+                gear = state.gear,
+                calibrated = state.gearCalibrated,
+                onLongPress = onOpenCalibration,
+                modifier = Modifier.weight(0.34f),
+            )
+            FtBigValue(
+                label = when (state.speedOrigin) {
+                    br.dev.ftdash.data.SpeedOrigin.GPS -> "Veloc. (GPS)"
+                    br.dev.ftdash.data.SpeedOrigin.SIMULATED -> "Veloc. (simulada)"
+                    br.dev.ftdash.data.SpeedOrigin.NONE -> "Veloc. (sem sinal)"
+                },
+                value = state.speedKmh?.let { "%.0f".format(it) } ?: "--",
+                unit = "Kmh",
+                valueColor = if (state.speedKmh == null) Zinc800 else Zinc100,
+                modifier = Modifier.weight(0.34f),
+            )
+        }
 
-            // Coluna central: os canais de acerto.
-            Column(
-                Modifier
-                    .weight(0.45f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Row(
-                    Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ValueTile(
-                        label = "MAP",
-                        value = state.fmt { "%+.2f".format(state.mapBar) },
-                        unit = "bar",
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    ValueTile(
-                        label = "TPS",
-                        value = state.fmt { "%.0f".format(state.tpsPct) },
-                        unit = "%",
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    ValueTile(
-                        label = "LAMBDA",
-                        // Sonda em erro (bruto 9990) vira "--", nunca um número
-                        // que pareça leitura boa. O fmt também é necessário
-                        // aqui: sem ele o λ é o único mostrador que não zera
-                        // quando a telemetria cai, e fica um valor velho no
-                        // meio de uma tela de traços.
-                        value = state.fmt { state.lambda?.let { "%.2f".format(it) } },
-                        unit = "",
-                        valueColor = lambdaColor(state.lambda, state.lambdaTarget),
-                        secondary = if (state.lambdaTarget > 0f) {
-                            "alvo %.2f".format(state.lambdaTarget)
-                        } else {
-                            // emparelha com "alvo 0.95" e cabe na largura do card
-                            "sem alvo"
-                        },
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                }
-                Row(
-                    Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    ValueTile(
-                        label = "PONTO",
-                        value = state.fmt { "%+.1f".format(state.ignitionDeg) },
-                        unit = "°",
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    ValueTile(
-                        label = "MALHA",
-                        value = state.fmt { "%+.1f".format(state.closedLoopPct) },
-                        unit = "%",
-                        valueColor = if (abs(state.closedLoopPct) > 15f) Amber500 else Zinc100,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    ValueTile(
-                        label = "INJ",
-                        value = state.fmt { "%.2f".format(state.injTimeMs) },
-                        unit = "ms",
-                        // o tempo de injeção sozinho diz pouco sem o duty
-                        secondary = state.fmt { "duty %.0f%%".format(state.injDutyPct) },
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                }
-            }
+        Divider()
 
-            // Coluna direita: saúde do motor.
-            Column(
-                Modifier
-                    .weight(0.29f)
-                    .fillMaxHeight()
-                    .padding(top = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                BarGauge(
-                    label = "TEMP. MOTOR",
-                    value = state.orNull(state.engineTempC),
-                    min = 0f, max = 130f, unit = "C",
-                    warnBelow = 70f, warnAbove = 100f, critAbove = 110f,
-                )
-                BarGauge(
-                    label = "TEMP. AR",
-                    value = state.orNull(state.airTempC),
-                    min = 0f, max = 80f, unit = "C",
-                    warnAbove = 60f,
-                )
-                BarGauge(
-                    label = "PRESSAO OLEO",
-                    value = state.orNull(state.oilPressureBar),
-                    min = 0f, max = 8f, unit = "bar", decimals = 2,
-                    critBelow = 0.8f, warnBelow = 1.5f,
-                )
-                BarGauge(
-                    label = "PRESSAO COMB.",
-                    value = state.orNull(state.fuelPressureBar),
-                    min = 0f, max = 6f, unit = "bar", decimals = 2,
-                    warnBelow = 2.5f,
-                )
-                BarGauge(
-                    label = "BATERIA",
-                    value = state.orNull(state.vbat),
-                    min = 8f, max = 16f, unit = "V", decimals = 2,
-                    critBelow = 11.5f, warnBelow = 12.5f, warnAbove = 15f,
-                )
-                BarGauge(
-                    label = "ATUADOR LENTA",
-                    value = state.orNull(state.idleActuatorPct),
-                    min = 0f, max = 100f, unit = "%", decimals = 0,
-                )
+        // ── Tira de canais do motor ──
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .weight(0.30f)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            FtChannel(
+                "T.Motor",
+                state.fmt { "%.1f".format(state.engineTempC) },
+                tempColor(state.engineTempC, state.hasData),
+                Modifier.weight(1f),
+            )
+            FtVerticalGauge(
+                label = "P.Oleo",
+                value = state.orNull(state.oilPressureBar),
+                min = 0f, max = 8f,
+                critBelow = 0.8f, warnBelow = 1.5f,
+                ticks = listOf(8, 4, 0),
+                modifier = Modifier.weight(1f),
+            )
+            FtChannel(
+                "S Geral",
+                state.fmt { state.lambda?.let { "%.2f".format(it) } },
+                lambdaColor(state.lambda, state.lambdaTarget),
+                Modifier.weight(1f),
+            )
+            FtVerticalGauge(
+                label = "P.Comb",
+                value = state.orNull(state.fuelPressureBar),
+                min = 0f, max = 6f,
+                warnBelow = 2.5f,
+                ticks = listOf(6, 3, 0),
+                modifier = Modifier.weight(1f),
+            )
+            FtChannel(
+                "T.Ar",
+                state.fmt { "%.1f".format(state.airTempC) },
+                if (state.hasData && state.airTempC > 60f) Amber500 else Zinc100,
+                Modifier.weight(1f),
+            )
+            FtChannel(
+                "Ponto",
+                state.fmt { "%+.1f".format(state.ignitionDeg) },
+                Zinc100,
+                Modifier.weight(1f),
+            )
+            FtChannel(
+                "Malha",
+                state.fmt { "%+.1f".format(state.closedLoopPct) },
+                if (state.hasData && abs(state.closedLoopPct) > 15f) Amber500 else Zinc100,
+                Modifier.weight(1f),
+            )
+            FtChannel(
+                "Inj ms",
+                state.fmt { "%.2f".format(state.injTimeMs) },
+                Zinc100,
+                Modifier.weight(1f),
+            )
+        }
 
-                Spacer(Modifier.weight(1f))
+        Divider()
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FlagChip("CUTOFF", state.cutoff)
-                }
-            }
+        // ── Tanque e status ──
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .weight(0.24f)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FtTankGauge(
+                fraction = state.fuelRemainingFraction,
+                liters = state.fuelRemainingLiters,
+                tankLiters = state.tankLiters,
+                onFillTank = onFillTank,
+                modifier = Modifier.weight(0.40f),
+            )
+            FtChannel("MAP", state.fmt { "%+.2f".format(state.mapBar) }, Zinc100, Modifier.weight(0.14f))
+            FtChannel("TPS", state.fmt { "%.0f".format(state.tpsPct) }, Zinc100, Modifier.weight(0.12f))
+            FtChannel(
+                "Lenta",
+                state.fmt { "%.0f".format(state.idleActuatorPct) },
+                Zinc100,
+                Modifier.weight(0.14f),
+            )
+            FtChannel("Vbat", state.fmt { "%.2f".format(state.vbat) }, vbatColor(state), Modifier.weight(0.14f))
+            FtStatusBox("CUTOFF", state.hasData && state.cutoff)
         }
 
         StatusBar(
@@ -222,11 +221,50 @@ fun DashScreen(
     }
 }
 
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.Divider() {
+    Spacer(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Zinc800),
+    )
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.OdometerPanelSlot(
+    state: DashUiState,
+    onResetTrip: () -> Unit,
+) {
+    br.dev.ftdash.ui.dash.components.OdometerPanel(
+        totalKm = state.totalKm,
+        tripKm = state.tripKm,
+        onResetTrip = onResetTrip,
+        modifier = Modifier.weight(0.26f).fillMaxHeight(),
+    )
+}
+
 /** Antes do primeiro frame — e depois que a telemetria cai — tudo é "--". */
 private inline fun DashUiState.fmt(format: () -> String?): String? =
     if (hasData) format() else null
 
 private fun DashUiState.orNull(v: Float): Float? = if (hasData) v else null
+
+private fun tempColor(temp: Float, hasData: Boolean) = when {
+    !hasData -> Zinc100
+    temp > 110f -> Red500
+    temp > 100f -> Amber500
+    temp < 70f -> Amber500
+    else -> Emerald500
+}
+
+private fun vbatColor(state: DashUiState) = when {
+    !state.hasData -> Zinc100
+    state.vbat < 11.5f -> Red500
+    state.vbat < 12.5f -> Amber500
+    state.vbat > 15f -> Amber500
+    else -> Emerald500
+}
 
 private fun lambdaColor(lambda: Float?, target: Float) = when {
     lambda == null || target <= 0f -> Zinc100
