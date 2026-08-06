@@ -27,6 +27,15 @@ data class TripState(
     val tripKm: Double = 0.0,
     /** Litros queimados desde o último "enchi o tanque". */
     val fuelUsedLiters: Double = 0.0,
+    /**
+     * Distância desde o último "enchi o tanque".
+     *
+     * Separada do parcial de propósito: a média só faz sentido se distância e
+     * combustível forem contados a partir do **mesmo** instante. Dividir o
+     * parcial (que você zera quando quiser) pelo consumo do tanque daria um
+     * número sem significado nenhum.
+     */
+    val kmSinceFill: Double = 0.0,
 )
 
 /**
@@ -62,10 +71,53 @@ class TripComputer(initial: TripState = TripState()) {
     var fuelUsedLiters: Double = initial.fuelUsedLiters
         private set
 
+    var kmSinceFill: Double = initial.kmSinceFill
+        private set
+
     private var lastSpeedTsMs: Long = 0
     private var lastFuelTsMs: Long = 0
 
-    val state: TripState get() = TripState(totalKm, tripKm, fuelUsedLiters)
+    /** Vazão atual em L/h, suavizada — a base da média instantânea. */
+    private var smoothedFuelLh: Double? = null
+
+    /** Velocidade suavizada com a mesma constante de tempo da vazão. */
+    private var smoothedKmh: Double? = null
+
+    val state: TripState get() = TripState(totalKm, tripKm, fuelUsedLiters, kmSinceFill)
+
+    /**
+     * Média desde o último abastecimento, em km/L.
+     *
+     * Null enquanto não houver combustível suficiente contado: nos primeiros
+     * metros a divisão explode (100 m gastando 5 ml daria 20 km/L), e um
+     * número desses no painel é pior que nenhum.
+     */
+    val averageKmPerLiter: Double?
+        get() = if (fuelUsedLiters < MIN_FUEL_FOR_AVERAGE) null
+        else kmSinceFill / fuelUsedLiters
+
+    /**
+     * Consumo agora, em km/L.
+     *
+     * Sai da velocidade dividida pela vazão instantânea dos bicos, os dois
+     * suavizados com a mesma constante de tempo — se só um fosse filtrado, o
+     * quociente daria picos a cada mudança de regime.
+     *
+     * Casos que não são número:
+     * - parado ou quase (abaixo de [MIN_KMH_FOR_INSTANT]): km/L não significa
+     *   nada com o carro parado, e a divisão tende a zero;
+     * - em corte na desaceleração o consumo é literalmente zero e o resultado
+     *   seria infinito — aí o valor satura em [MAX_INSTANT_KM_L], que é como os
+     *   computadores de bordo de fábrica se comportam.
+     */
+    val instantKmPerLiter: Double?
+        get() {
+            val kmh = smoothedKmh ?: return null
+            val lh = smoothedFuelLh ?: return null
+            if (kmh < MIN_KMH_FOR_INSTANT) return null
+            if (lh < MIN_FLOW_LH) return MAX_INSTANT_KM_L
+            return (kmh / lh).coerceAtMost(MAX_INSTANT_KM_L)
+        }
 
     /**
      * Integra a distância entre esta fixação e a anterior.
@@ -79,7 +131,12 @@ class TripComputer(initial: TripState = TripState()) {
     fun onSpeedFix(tsMs: Long, kmh: Float?) {
         val previous = lastSpeedTsMs
         lastSpeedTsMs = tsMs
-        if (kmh == null || kmh <= 0f || previous == 0L) return
+        if (kmh == null) {
+            smoothedKmh = null
+            return
+        }
+        smoothedKmh = smooth(smoothedKmh, kmh.toDouble())
+        if (kmh <= 0f || previous == 0L) return
 
         val dtMs = tsMs - previous
         if (dtMs < MIN_DT_MS || dtMs > MAX_DT_MS) return
@@ -87,6 +144,7 @@ class TripComputer(initial: TripState = TripState()) {
         val km = kmh.toDouble() * (dtMs / 3_600_000.0)
         totalKm += km
         tripKm += km
+        kmSinceFill += km
     }
 
     /**
@@ -97,17 +155,24 @@ class TripComputer(initial: TripState = TripState()) {
     fun onInjection(tsMs: Long, dutyPct: Float, setup: FuelSetup) {
         val previous = lastFuelTsMs
         lastFuelTsMs = tsMs
-        if (previous == 0L || !setup.isComplete) return
-        if (dutyPct <= 0f || dutyPct > 100f) return
+        if (!setup.isComplete) return
+        if (dutyPct < 0f || dutyPct > 100f) return
 
+        // cc/min de todos os bicos com o duty atual
+        val ccPerMin = setup.injectorFlowCcMin * setup.injectorCount * (dutyPct / 100.0)
+        // O duty ZERO também entra na suavização: é o corte na desaceleração, e
+        // ignorá-lo faria a média instantânea travar no último valor gasto em
+        // vez de mostrar que o motor parou de consumir.
+        smoothedFuelLh = smooth(smoothedFuelLh, ccPerMin * 60.0 / 1000.0)
+
+        if (previous == 0L || dutyPct <= 0f) return
         val dtMs = tsMs - previous
         if (dtMs < 1 || dtMs > MAX_DT_MS) return
-
-        // cc/min de todos os bicos com o duty atual, convertido para litros no
-        // intervalo decorrido
-        val ccPerMin = setup.injectorFlowCcMin * setup.injectorCount * (dutyPct / 100.0)
         fuelUsedLiters += ccPerMin * (dtMs / 60_000.0) / 1000.0
     }
+
+    private fun smooth(current: Double?, sample: Double): Double =
+        current?.let { it + SMOOTHING * (sample - it) } ?: sample
 
     /** Litros que ainda devem estar no tanque, ou null se falta configuração. */
     fun remainingLiters(setup: FuelSetup): Double? {
@@ -121,9 +186,15 @@ class TripComputer(initial: TripState = TripState()) {
         return (liters / setup.tankLiters).toFloat().coerceIn(0f, 1f)
     }
 
-    /** Botão "enchi o tanque": zera o consumo acumulado. */
+    /**
+     * Botão "enchi o tanque": zera consumo e distância juntos.
+     *
+     * Os dois têm que zerar no mesmo instante, senão a média passa a dividir
+     * uma distância antiga por um consumo novo.
+     */
     fun fillTank() {
         fuelUsedLiters = 0.0
+        kmSinceFill = 0.0
     }
 
     /** Zera só o parcial; o total nunca é zerado por aqui. */
@@ -132,10 +203,24 @@ class TripComputer(initial: TripState = TripState()) {
     }
 
     /** Recarrega o estado persistido, sem perder as marcas de tempo. */
+    /**
+     * Recarrega o estado persistido, sem perder as marcas de tempo.
+     *
+     * Consumo gravado sem distância correspondente é um par impossível: só
+     * acontece quando o estado vem de uma versão que ainda não contava a
+     * distância desde o abastecimento. Dividir um pelo outro daria uma média
+     * absurda e permanente — 36 km divididos por 6,7 L acumulados noutra
+     * sessão dão 0,2 km/L, e o número ficaria assim até o próximo
+     * abastecimento. Nesse caso o par é descartado e vale como tanque cheio;
+     * é uma vez só, na atualização, e o usuário re-referencia no primeiro
+     * abastecimento de qualquer forma.
+     */
     fun restore(state: TripState) {
         totalKm = state.totalKm
         tripKm = state.tripKm
-        fuelUsedLiters = state.fuelUsedLiters
+        val inconsistent = state.fuelUsedLiters > 0.0 && state.kmSinceFill <= 0.0
+        fuelUsedLiters = if (inconsistent) 0.0 else state.fuelUsedLiters
+        kmSinceFill = if (inconsistent) 0.0 else state.kmSinceFill
     }
 
     companion object {
@@ -144,5 +229,17 @@ class TripComputer(initial: TripState = TripState()) {
 
         /** Acima disso a amostra anterior não diz mais nada sobre o intervalo. */
         const val MAX_DT_MS = 5_000L
+
+        /** Meio litro: antes disso a média ainda é ruído dividido por ruído. */
+        const val MIN_FUEL_FOR_AVERAGE = 0.5
+
+        /** Filtro exponencial da média instantânea, aplicado à vazão e à velocidade. */
+        const val SMOOTHING = 0.15
+
+        const val MIN_KMH_FOR_INSTANT = 5.0
+        const val MIN_FLOW_LH = 0.05
+
+        /** Teto do mostrador em corte, onde o consumo é zero e a conta é infinita. */
+        const val MAX_INSTANT_KM_L = 99.9
     }
 }

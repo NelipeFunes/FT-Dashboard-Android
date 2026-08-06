@@ -96,6 +96,8 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                 tankLiters = s.fuelSetup.tankLiters,
                 totalKm = trip.totalKm,
                 tripKm = trip.tripKm,
+                averageKmPerLiter = trip.averageKmPerLiter,
+                instantKmPerLiter = trip.instantKmPerLiter,
                 fuelRemainingLiters = trip.remainingLiters(s.fuelSetup),
                 fuelRemainingFraction = trip.remainingFraction(s.fuelSetup),
             )
@@ -146,6 +148,8 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                         hasData = true,
                         totalKm = trip.totalKm,
                         tripKm = trip.tripKm,
+                        averageKmPerLiter = trip.averageKmPerLiter,
+                        instantKmPerLiter = trip.instantKmPerLiter,
                         fuelRemainingLiters = trip.remainingLiters(fuelSetup),
                         fuelRemainingFraction = trip.remainingFraction(fuelSetup),
                     )
@@ -258,6 +262,8 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             gear = gear,
             totalKm = trip.totalKm,
             tripKm = trip.tripKm,
+            averageKmPerLiter = trip.averageKmPerLiter,
+            instantKmPerLiter = trip.instantKmPerLiter,
         )
     }
 

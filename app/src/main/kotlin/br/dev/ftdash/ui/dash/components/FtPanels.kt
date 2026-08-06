@@ -65,6 +65,8 @@ private val ValueSmall = TextStyle(
 fun OdometerPanel(
     totalKm: Double,
     tripKm: Double,
+    averageKmPerLiter: Double?,
+    instantKmPerLiter: Double?,
     onResetTrip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -77,16 +79,51 @@ fun OdometerPanel(
                 onClick = { },
                 onLongClick = onResetTrip,
             )
-            .padding(horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 8.dp),
     ) {
-        Text("Odometro", style = LabelSmall, color = Zinc400)
-        Spacer(Modifier.height(2.dp))
-        Text("Total", style = LabelSmall, color = Zinc500)
-        Text("%.1f".format(totalKm), style = ValueSmall, color = Zinc100)
-        Spacer(Modifier.height(2.dp))
-        Text("Parcial", style = LabelSmall, color = Zinc500)
-        Text("%.1f".format(tripKm), style = ValueSmall, color = Zinc100)
+        Text(
+            "Odometro",
+            style = LabelSmall,
+            color = Zinc400,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
+        OdoRow("Total", "%.1f".format(totalKm))
+        OdoRow("Parcial", "%.1f".format(tripKm))
+
+        Spacer(Modifier.height(5.dp))
+        Text(
+            "Media km/L",
+            style = LabelSmall,
+            color = Zinc400,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
+        // A média do tanque só aparece depois de meio litro consumido, e a
+        // instantânea some com o carro parado. Nos dois casos "--" é a resposta
+        // honesta: km/L parado, ou com dois decilitros de amostra, é ruído.
+        OdoRow(
+            "Tanque",
+            averageKmPerLiter?.let { "%.1f".format(it) } ?: "--",
+            if (averageKmPerLiter == null) Zinc500 else Emerald500,
+        )
+        OdoRow(
+            "Agora",
+            instantKmPerLiter?.let {
+                if (it >= 99.0) ">99" else "%.1f".format(it)
+            } ?: "--",
+            if (instantKmPerLiter == null) Zinc500 else Zinc100,
+        )
+    }
+}
+
+/** Linha rótulo-à-esquerda / valor-à-direita do bloco do odômetro. */
+@Composable
+private fun OdoRow(label: String, value: String, valueColor: Color = Zinc100) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Text(label, style = LabelSmall, color = Zinc500)
+        Spacer(Modifier.weight(1f))
+        Text(value, style = ValueSmall, color = valueColor, maxLines = 1)
     }
 }
 

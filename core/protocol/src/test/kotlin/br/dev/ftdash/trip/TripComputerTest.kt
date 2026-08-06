@@ -129,6 +129,136 @@ class TripComputerTest {
     }
 
     @Test
+    fun `media bate com a conta de km por litro`() {
+        val trip = TripComputer()
+        // 60 km/h com duty de 12,5%: 4 × 320 × 0,125 = 160 cc/min = 9,6 L/h.
+        // 60 km/h ÷ 9,6 L/h = 6,25 km/L.
+        var t = 0L
+        repeat(3601) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        assertEquals(6.25, trip.averageKmPerLiter!!, 0.05)
+    }
+
+    @Test
+    fun `media so aparece depois de meio litro`() {
+        val trip = TripComputer()
+        var t = 0L
+        // poucos segundos: distância e consumo mínimos, a divisão ainda é ruído
+        repeat(20) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        assertNull("não pode publicar média com consumo desprezível", trip.averageKmPerLiter)
+    }
+
+    @Test
+    fun `encher o tanque zera distancia e consumo juntos`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(3601) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        val totalBefore = trip.totalKm
+        trip.fillTank()
+
+        // a média some junto: sem os dois zerados ela dividiria distância
+        // velha por consumo novo
+        assertNull(trip.averageKmPerLiter)
+        assertEquals(0.0, trip.kmSinceFill, 0.0)
+        assertEquals("o total não é afetado", totalBefore, trip.totalKm, 1e-9)
+    }
+
+    @Test
+    fun `instantanea converge para o consumo do momento`() {
+        val trip = TripComputer()
+        var t = 0L
+        // mesma condição do teste da média: deveria dar os mesmos 6,25 km/L
+        repeat(400) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 100
+        }
+        assertEquals(6.25, trip.instantKmPerLiter!!, 0.2)
+    }
+
+    @Test
+    fun `instantanea satura em corte de combustivel`() {
+        val trip = TripComputer()
+        var t = 0L
+        // descendo a serra: andando rápido com o bico fechado
+        repeat(400) {
+            trip.onSpeedFix(t, 80f)
+            trip.onInjection(t, 0f, setup)
+            t += 100
+        }
+        assertEquals(
+            "consumo zero daria infinito; satura no teto",
+            TripComputer.MAX_INSTANT_KM_L,
+            trip.instantKmPerLiter!!,
+            0.001,
+        )
+    }
+
+    @Test
+    fun `instantanea nao e numero com o carro parado`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(400) {
+            trip.onSpeedFix(t, 0f)
+            trip.onInjection(t, 8f, setup)
+            t += 100
+        }
+        assertNull("km/L parado não significa nada", trip.instantKmPerLiter)
+    }
+
+    @Test
+    fun `instantanea acompanha mudanca de regime`() {
+        val trip = TripComputer()
+        var t = 0L
+        // cruzeiro econômico
+        repeat(400) { trip.onSpeedFix(t, 90f); trip.onInjection(t, 10f, setup); t += 100 }
+        val cruising = trip.instantKmPerLiter!!
+
+        // pé no fundo: mesma velocidade, muito mais combustível
+        repeat(400) { trip.onSpeedFix(t, 90f); trip.onInjection(t, 60f, setup); t += 100 }
+        val flooring = trip.instantKmPerLiter!!
+
+        assertTrue("acelerando tem que consumir mais: $cruising -> $flooring", flooring < cruising / 3)
+    }
+
+    @Test
+    fun `estado de versao antiga nao produz media absurda`() {
+        // Como ficava o disco antes de existir kmSinceFill: consumo acumulado,
+        // distância desde o abastecimento zerada. Sem tratamento, a média sairia
+        // em 0,2 km/L e ficaria assim até o próximo abastecimento.
+        val legacy = TripState(totalKm = 1200.0, tripKm = 36.5, fuelUsedLiters = 6.7)
+        val trip = TripComputer()
+        trip.restore(legacy)
+
+        assertEquals("o odômetro total não pode ser perdido", 1200.0, trip.totalKm, 1e-9)
+        assertEquals(36.5, trip.tripKm, 1e-9)
+        assertEquals("par impossível é descartado", 0.0, trip.fuelUsedLiters, 0.0)
+        assertNull(trip.averageKmPerLiter)
+    }
+
+    @Test
+    fun `estado coerente e restaurado inteiro`() {
+        val saved = TripState(totalKm = 1200.0, tripKm = 36.5, fuelUsedLiters = 6.7, kmSinceFill = 55.0)
+        val trip = TripComputer()
+        trip.restore(saved)
+
+        assertEquals(6.7, trip.fuelUsedLiters, 1e-9)
+        assertEquals(55.0, trip.kmSinceFill, 1e-9)
+        assertEquals(55.0 / 6.7, trip.averageKmPerLiter!!, 1e-9)
+    }
+
+    @Test
     fun `duty invalido e ignorado`() {
         val trip = TripComputer()
         var t = 0L

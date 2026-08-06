@@ -40,6 +40,10 @@ data class DashUiState(
 
     val totalKm: Double = 0.0,
     val tripKm: Double = 0.0,
+    /** km/L desde o último abastecimento; null até haver consumo suficiente. */
+    val averageKmPerLiter: Double? = null,
+    /** km/L agora, suavizado; null parado ou sem configuração. */
+    val instantKmPerLiter: Double? = null,
     /** null quando falta configurar tanque, vazão do bico ou quantidade. */
     val fuelRemainingLiters: Double? = null,
     val fuelRemainingFraction: Float? = null,
