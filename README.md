@@ -75,6 +75,28 @@ Toque longo no indicador de marcha abre a tela. Dois caminhos, mesma lista edit�
 Na prática o manual serve para começar e o aprendizado para corrigir: pneu gasto, patinagem e erro de
 catálogo entram na medida real.
 
+## Computador de bordo
+
+Nada disso vem da ECU — é tudo calculado, e mostra `--` em vez de inventar quando falta configuração.
+
+- **Odômetro** (total e parcial): velocidade do GPS integrada no tempo. Toque longo zera o parcial.
+- **Tanque**: capacidade configurada menos o que passou pelos bicos. Precisa dos três campos da aba
+  *TANQUE* — capacidade, vazão nominal de **um** bico em cc/min, e quantos são.
+- **Média km/L**: parcial dividido pelo combustível do mesmo trecho. Zera junto com o parcial.
+- **Instantânea**: velocidade dividida pela vazão atual, ambas suavizadas com a mesma constante de tempo.
+  Em corte de combustível o consumo é zero e a conta daria infinito — satura e mostra `>99`.
+
+Abastecer tem duas formas: *ENCHI O TANQUE* (cheio) ou *COLOQUEI [x] L* (parcial, nunca ultrapassa a
+capacidade).
+
+O consumo é contado **duas vezes**, de propósito, porque responde a duas perguntas com regras opostas: o
+nível do tanque diminui ao abastecer, o denominador da média só cresce. Fossem o mesmo número, somar 10
+litros faria a média saltar sozinha sem ninguém ter andado nada.
+
+Duas limitações conhecidas do cálculo de combustível: usa a **vazão nominal** do bico, e a real varia com
+a pressão (erra para menos em pressão alta, para mais em baixa); e ignora o enriquecimento de partida.
+Serve para saber que está na reserva, não para chegar no lacrado.
+
 ## Escala da barra de RPM
 
 Aba **RPM** da configuração, dois modos:
