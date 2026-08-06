@@ -70,6 +70,8 @@ fun GearCalibScreen(
     onFuelField: (String?, String?, String?) -> Unit,
     onApplyFuel: () -> Unit,
     onFillTank: () -> Unit,
+    onAddFuelField: (String) -> Unit,
+    onAddFuel: () -> Unit,
     onRescanUsb: () -> Unit,
     onUseUsb: () -> Unit,
     onUseReplay: () -> Unit,
@@ -108,7 +110,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
-                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank)
+                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel)
                     CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
@@ -418,6 +420,8 @@ private fun FuelModePanel(
     onField: (String?, String?, String?) -> Unit,
     onApply: () -> Unit,
     onFillTank: () -> Unit,
+    onAddFuelField: (String) -> Unit,
+    onAddFuel: () -> Unit,
 ) {
     Column(
         Modifier
@@ -481,6 +485,31 @@ private fun FuelModePanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("ENCHI O TANQUE", style = LabelStyle)
+        }
+
+        // Abastecimento parcial: nem toda parada de posto é tanque cheio.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            NumField(
+                "COLOQUEI",
+                state.addFuelLiters,
+                Modifier.weight(1f),
+                decimal = true,
+                placeholder = "litros",
+            ) { onAddFuelField(it) }
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = onAddFuel,
+                enabled = state.addFuelLiters.replace(',', '.').toDoubleOrNull()?.let { it > 0 } == true,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Emerald500,
+                    contentColor = Zinc950,
+                    disabledContainerColor = Zinc800,
+                    disabledContentColor = Zinc500,
+                ),
+                shape = RoundedCornerShape(4.dp),
+            ) {
+                Text("SOMAR", style = LabelStyle)
+            }
         }
     }
 }

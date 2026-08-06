@@ -115,8 +115,8 @@ class SettingsStore(private val context: Context) {
             trip = TripState(
                 totalKm = prefs[KEY_TOTAL_KM]?.toDouble() ?: 0.0,
                 tripKm = prefs[KEY_TRIP_KM]?.toDouble() ?: 0.0,
-                fuelUsedLiters = prefs[KEY_FUEL_USED]?.toDouble() ?: 0.0,
-                kmSinceFill = prefs[KEY_KM_SINCE_FILL]?.toDouble() ?: 0.0,
+                tripFuelLiters = prefs[KEY_TRIP_FUEL]?.toDouble() ?: 0.0,
+                tankUsedLiters = prefs[KEY_TANK_USED]?.toDouble() ?: 0.0,
             ),
             replaySpeed = prefs[KEY_REPLAY_SPEED] ?: 1.0f,
             useSimulatedSpeed = (prefs[KEY_SIMULATED_SPEED] ?: 1) == 1,
@@ -174,8 +174,8 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit {
             it[KEY_TOTAL_KM] = trip.totalKm.toFloat()
             it[KEY_TRIP_KM] = trip.tripKm.toFloat()
-            it[KEY_FUEL_USED] = trip.fuelUsedLiters.toFloat()
-            it[KEY_KM_SINCE_FILL] = trip.kmSinceFill.toFloat()
+            it[KEY_TRIP_FUEL] = trip.tripFuelLiters.toFloat()
+            it[KEY_TANK_USED] = trip.tankUsedLiters.toFloat()
         }
     }
 
@@ -204,8 +204,12 @@ class SettingsStore(private val context: Context) {
         val KEY_INJECTOR_COUNT = intPreferencesKey("injector_count")
         val KEY_TOTAL_KM = floatPreferencesKey("odo_total_km")
         val KEY_TRIP_KM = floatPreferencesKey("odo_trip_km")
-        val KEY_FUEL_USED = floatPreferencesKey("fuel_used_liters")
-        val KEY_KM_SINCE_FILL = floatPreferencesKey("km_since_fill")
+        // Chaves novas: as antigas (fuel_used_liters, km_since_fill) misturavam
+        // nível do tanque com denominador da média. Ficam órfãs no disco e o
+        // estado recomeça — o odômetro total, que é o que ninguém quer perder,
+        // tem chave própria e não foi tocado.
+        val KEY_TRIP_FUEL = floatPreferencesKey("trip_fuel_liters")
+        val KEY_TANK_USED = floatPreferencesKey("tank_used_liters")
         val KEY_REPLAY_SPEED = floatPreferencesKey("replay_speed")
         val KEY_SIMULATED_SPEED = intPreferencesKey("use_simulated_speed")
     }

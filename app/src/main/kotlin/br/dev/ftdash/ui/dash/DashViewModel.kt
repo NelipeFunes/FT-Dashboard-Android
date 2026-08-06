@@ -241,6 +241,12 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsStore.saveTrip(trip.state)
     }
 
+    /** Abastecimento parcial: soma litros ao nível, sem encher. */
+    fun addFuel(liters: Double) = viewModelScope.launch {
+        trip.addFuel(liters, fuelSetup)
+        container.settingsStore.saveTrip(trip.state)
+    }
+
     /** Zera o parcial, sem tocar no total. */
     fun resetTrip() = viewModelScope.launch {
         trip.resetTrip()

@@ -69,7 +69,7 @@ class TripComputerTest {
             trip.onInjection(t, 25f, setup)
             t += 1000
         }
-        assertEquals(19.2, trip.fuelUsedLiters, 0.05)
+        assertEquals(19.2, trip.tankUsedLiters, 0.05)
     }
 
     @Test
@@ -95,10 +95,10 @@ class TripComputerTest {
         val trip = TripComputer()
         var t = 0L
         repeat(1801) { trip.onInjection(t, 50f, setup); t += 1000 }
-        assertTrue(trip.fuelUsedLiters > 10)
+        assertTrue(trip.tankUsedLiters > 10)
 
         trip.fillTank()
-        assertEquals(0.0, trip.fuelUsedLiters, 0.0)
+        assertEquals(0.0, trip.tankUsedLiters, 0.0)
         assertEquals(45.0, trip.remainingLiters(setup)!!, 1e-9)
     }
 
@@ -112,7 +112,7 @@ class TripComputerTest {
         // e também não acumula consumo sem saber a vazão
         var t = 0L
         repeat(100) { trip.onInjection(t, 50f, incomplete); t += 1000 }
-        assertEquals(0.0, trip.fuelUsedLiters, 0.0)
+        assertEquals(0.0, trip.tankUsedLiters, 0.0)
     }
 
     @Test
@@ -125,7 +125,8 @@ class TripComputerTest {
         val restored = TripComputer(saved)
         assertEquals(trip.totalKm, restored.totalKm, 1e-9)
         assertEquals(trip.tripKm, restored.tripKm, 1e-9)
-        assertEquals(trip.fuelUsedLiters, restored.fuelUsedLiters, 1e-9)
+        assertEquals(trip.tankUsedLiters, restored.tankUsedLiters, 1e-9)
+        assertEquals(trip.tripFuelLiters, restored.tripFuelLiters, 1e-9)
     }
 
     @Test
@@ -156,7 +157,7 @@ class TripComputerTest {
     }
 
     @Test
-    fun `encher o tanque zera distancia e consumo juntos`() {
+    fun `encher o tanque so mexe no nivel`() {
         val trip = TripComputer()
         var t = 0L
         repeat(3601) {
@@ -165,13 +166,12 @@ class TripComputerTest {
             t += 1000
         }
         val totalBefore = trip.totalKm
+        val tripBefore = trip.tripKm
         trip.fillTank()
 
-        // a média some junto: sem os dois zerados ela dividiria distância
-        // velha por consumo novo
-        assertNull(trip.averageKmPerLiter)
-        assertEquals(0.0, trip.kmSinceFill, 0.0)
+        assertEquals(45.0, trip.remainingLiters(setup)!!, 1e-9)
         assertEquals("o total não é afetado", totalBefore, trip.totalKm, 1e-9)
+        assertEquals("o parcial não é afetado", tripBefore, trip.tripKm, 1e-9)
     }
 
     @Test
@@ -234,28 +234,111 @@ class TripComputerTest {
 
     @Test
     fun `estado de versao antiga nao produz media absurda`() {
-        // Como ficava o disco antes de existir kmSinceFill: consumo acumulado,
-        // distância desde o abastecimento zerada. Sem tratamento, a média sairia
-        // em 0,2 km/L e ficaria assim até o próximo abastecimento.
-        val legacy = TripState(totalKm = 1200.0, tripKm = 36.5, fuelUsedLiters = 6.7)
+        // Como ficava o disco antes de existir o combustível da viagem: parcial
+        // acumulado, denominador da média zerado. Sem tratamento, os primeiros
+        // 0,5 L dariam 36,5 / 0,5 = 73 km/L, e ficaria assim até zerar o parcial.
+        val legacy = TripState(totalKm = 1200.0, tripKm = 36.5, tankUsedLiters = 6.7)
         val trip = TripComputer()
         trip.restore(legacy)
 
         assertEquals("o odômetro total não pode ser perdido", 1200.0, trip.totalKm, 1e-9)
-        assertEquals(36.5, trip.tripKm, 1e-9)
-        assertEquals("par impossível é descartado", 0.0, trip.fuelUsedLiters, 0.0)
+        assertEquals("o nível do tanque não é afetado", 6.7, trip.tankUsedLiters, 1e-9)
+        assertEquals("o parcial recomeça", 0.0, trip.tripKm, 0.0)
         assertNull(trip.averageKmPerLiter)
     }
 
     @Test
     fun `estado coerente e restaurado inteiro`() {
-        val saved = TripState(totalKm = 1200.0, tripKm = 36.5, fuelUsedLiters = 6.7, kmSinceFill = 55.0)
+        val saved = TripState(
+            totalKm = 1200.0,
+            tripKm = 55.0,
+            tripFuelLiters = 6.7,
+            tankUsedLiters = 6.7,
+        )
         val trip = TripComputer()
         trip.restore(saved)
 
-        assertEquals(6.7, trip.fuelUsedLiters, 1e-9)
-        assertEquals(55.0, trip.kmSinceFill, 1e-9)
+        assertEquals(6.7, trip.tankUsedLiters, 1e-9)
+        assertEquals(55.0, trip.tripKm, 1e-9)
         assertEquals(55.0 / 6.7, trip.averageKmPerLiter!!, 1e-9)
+    }
+
+    @Test
+    fun `abastecimento parcial soma ao nivel sem encher`() {
+        val trip = TripComputer()
+        var t = 0L
+        // queima ~19,2 L: sobram ~25,8 de 45
+        repeat(1801) { trip.onInjection(t, 50f, setup); t += 1000 }
+        val before = trip.remainingLiters(setup)!!
+        assertEquals(45.0 - 19.2, before, 0.1)
+
+        trip.addFuel(10.0, setup)
+        assertEquals(before + 10.0, trip.remainingLiters(setup)!!, 0.1)
+    }
+
+    @Test
+    fun `abastecimento parcial nao passa da capacidade`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(600) { trip.onInjection(t, 50f, setup); t += 1000 }  // ~6,4 L
+        // 20 litros num tanque com espaço para ~6,4: dá cheio, e não sobra
+        // "crédito" escondido que faria o mostrador mentir depois
+        trip.addFuel(20.0, setup)
+        assertEquals(45.0, trip.remainingLiters(setup)!!, 1e-9)
+        assertEquals(0.0, trip.tankUsedLiters, 1e-9)
+
+        // e a partir daqui o consumo volta a descer do cheio
+        repeat(600) { trip.onInjection(t, 50f, setup); t += 1000 }
+        assertTrue(trip.remainingLiters(setup)!! < 45.0)
+    }
+
+    @Test
+    fun `abastecer nao mexe na media`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(3601) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        val average = trip.averageKmPerLiter!!
+
+        // Este é o ponto do contador duplo: se o nível do tanque fosse também o
+        // denominador da média, somar 10 litros faria a média saltar sozinha.
+        trip.addFuel(10.0, setup)
+        assertEquals("combustível no tanque não muda o que o carro já fez", average, trip.averageKmPerLiter!!, 1e-9)
+
+        trip.fillTank()
+        assertEquals("encher também não", average, trip.averageKmPerLiter!!, 1e-9)
+    }
+
+    @Test
+    fun `zerar o parcial zera a media junto`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(3601) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        assertTrue(trip.averageKmPerLiter != null)
+        val tankBefore = trip.remainingLiters(setup)!!
+
+        trip.resetTrip()
+        assertNull("média e parcial são a mesma viagem", trip.averageKmPerLiter)
+        assertEquals(0.0, trip.tripKm, 0.0)
+        assertEquals("o tanque não é afetado", tankBefore, trip.remainingLiters(setup)!!, 1e-9)
+    }
+
+    @Test
+    fun `abastecer valor invalido nao faz nada`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(600) { trip.onInjection(t, 50f, setup); t += 1000 }
+        val before = trip.remainingLiters(setup)!!
+        trip.addFuel(0.0, setup)
+        trip.addFuel(-5.0, setup)
+        assertEquals(before, trip.remainingLiters(setup)!!, 1e-9)
     }
 
     @Test
@@ -264,6 +347,6 @@ class TripComputerTest {
         var t = 0L
         repeat(100) { trip.onInjection(t, 150f, setup); t += 1000 }
         repeat(100) { trip.onInjection(t, -5f, setup); t += 1000 }
-        assertEquals(0.0, trip.fuelUsedLiters, 0.0)
+        assertEquals(0.0, trip.tankUsedLiters, 0.0)
     }
 }

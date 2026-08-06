@@ -53,6 +53,8 @@ data class CalibUiState(
     val injectorCount: String = "",
     val fuelUsedLiters: Double = 0.0,
     val fuelRemainingLiters: Double? = null,
+    /** Campo do abastecimento parcial. */
+    val addFuelLiters: String = "",
 
     // --- aba de USB ---
     val usbReport: UsbBusReport? = null,
@@ -95,9 +97,9 @@ class GearCalibViewModel(
                         ?.let { "%.0f".format(it) } ?: _state.value.injectorFlow,
                     injectorCount = s.fuelSetup.injectorCount.takeIf { it > 0 }?.toString()
                         ?: _state.value.injectorCount,
-                    fuelUsedLiters = s.trip.fuelUsedLiters,
+                    fuelUsedLiters = s.trip.tankUsedLiters,
                     fuelRemainingLiters = if (s.fuelSetup.isComplete) {
-                        (s.fuelSetup.tankLiters - s.trip.fuelUsedLiters).coerceAtLeast(0.0)
+                        (s.fuelSetup.tankLiters - s.trip.tankUsedLiters).coerceAtLeast(0.0)
                     } else {
                         null
                     },
@@ -141,6 +143,14 @@ class GearCalibViewModel(
             message = null,
         )
     }
+
+    fun updateAddFuelField(liters: String) {
+        _state.value = _state.value.copy(addFuelLiters = liters, message = null)
+    }
+
+    /** Litros a somar, ou null se o campo não tem um número usável. */
+    fun addFuelLitersValue(): Double? =
+        _state.value.addFuelLiters.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
 
     fun applyFuelSetup() = viewModelScope.launch {
         val s = _state.value
