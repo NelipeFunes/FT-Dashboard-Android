@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Tema escuro fixo: é um painel de carro, não segue o tema do sistema.
+      A splash até o Compose subir precisa ter o mesmo preto do painel, senão
+      dá um flash branco na cara do motorista à noite.
+    -->
+    <style name="Theme.FtDash" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF09090B</item>
+        <item name="android:statusBarColor">#FF09090B</item>
+        <item name="android:navigationBarColor">#FF09090B</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
