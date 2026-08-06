@@ -2,7 +2,10 @@ package br.dev.ftdash.ui.dash.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,8 +28,11 @@ import br.dev.ftdash.data.SpeedOrigin
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.FtBlack
+import br.dev.ftdash.ui.theme.LabelStyle
 import br.dev.ftdash.ui.theme.NumberSmall
 import br.dev.ftdash.ui.theme.Red500
+import br.dev.ftdash.ui.theme.Zinc300
+import br.dev.ftdash.ui.theme.Zinc700
 import br.dev.ftdash.ui.theme.Zinc500
 import br.dev.ftdash.ui.theme.Zinc600
 import br.dev.ftdash.ui.theme.Zinc900
@@ -54,7 +61,9 @@ fun StatusBar(
     frameLen: Int,
     layoutKnown: Boolean,
     speedOrigin: SpeedOrigin,
+    bytesPerSec: Int,
     onLongPress: () -> Unit,
+    onOpenConfig: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -98,6 +107,10 @@ fun StatusBar(
             color = Zinc500,
         )
         Text("%.1f Hz".format(hz), style = NumberSmall, color = Zinc500)
+        // Bytes/s ao lado dos frames: é o que separa "cabo caiu" de "cabo vivo
+        // entregando lixo". Com bytes correndo e CRC subindo, o problema é
+        // ruído elétrico, não conexão.
+        Text("${bytesPerSec}B/s", style = NumberSmall, color = Zinc500)
         Text("frames $framesOk", style = NumberSmall, color = Zinc500)
         Text(
             "crc $crcFail",
@@ -122,7 +135,22 @@ fun StatusBar(
         Spacer(Modifier.weight(1f))
 
         if (sourceDetail != null) {
-            Text(sourceDetail, style = NumberSmall, color = Zinc500)
+            Text(sourceDetail, style = NumberSmall, color = Zinc500, maxLines = 1)
         }
+
+        // Botão de verdade, não toque longo escondido. Toque longo é bom para
+        // atalho de quem já sabe; para achar a configuração pela primeira vez,
+        // parado no carro, precisa estar escrito na tela.
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "CONFIG",
+            style = LabelStyle,
+            color = Zinc300,
+            modifier = Modifier
+                .background(Zinc900, RoundedCornerShape(3.dp))
+                .border(1.dp, Zinc700, RoundedCornerShape(3.dp))
+                .clickable(onClick = onOpenConfig)
+                .padding(horizontal = 10.dp, vertical = 3.dp),
+        )
     }
 }

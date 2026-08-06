@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.sp
 import br.dev.ftdash.gearing.GearState
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
+import br.dev.ftdash.ui.theme.LocalDashScale
 import br.dev.ftdash.ui.theme.MonoFamily
+import br.dev.ftdash.ui.theme.times
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc400
 import br.dev.ftdash.ui.theme.Zinc500
@@ -41,18 +43,28 @@ import br.dev.ftdash.ui.theme.Zinc800
 import br.dev.ftdash.ui.theme.Zinc900
 import androidx.compose.foundation.ExperimentalFoundationApi
 
-private val LabelSmall = TextStyle(
-    fontFamily = MonoFamily,
-    fontSize = 11.sp,
-    letterSpacing = 0.5.sp,
-)
+/** Rótulo pequeno, já escalado para a tela em uso. */
+@Composable
+private fun labelSmall(): TextStyle {
+    val scale = LocalDashScale.current
+    return TextStyle(
+        fontFamily = MonoFamily,
+        fontSize = 11.sp * scale,
+        letterSpacing = 0.5.sp,
+    )
+}
 
-private val ValueSmall = TextStyle(
-    fontFamily = MonoFamily,
-    fontWeight = FontWeight.Medium,
-    fontSize = 17.sp,
-    fontFeatureSettings = "tnum",
-)
+/** Valor de canal, já escalado. */
+@Composable
+private fun valueSmall(): TextStyle {
+    val scale = LocalDashScale.current
+    return TextStyle(
+        fontFamily = MonoFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 17.sp * scale,
+        fontFeatureSettings = "tnum",
+    )
+}
 
 /**
  * Odômetro total e parcial, como na FT.
@@ -83,7 +95,7 @@ fun OdometerPanel(
     ) {
         Text(
             "Odometro",
-            style = LabelSmall,
+            style = labelSmall(),
             color = Zinc400,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
@@ -94,7 +106,7 @@ fun OdometerPanel(
         Spacer(Modifier.height(5.dp))
         Text(
             "Media km/L",
-            style = LabelSmall,
+            style = labelSmall(),
             color = Zinc400,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
@@ -121,9 +133,9 @@ fun OdometerPanel(
 @Composable
 private fun OdoRow(label: String, value: String, valueColor: Color = Zinc100) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Text(label, style = LabelSmall, color = Zinc500)
+        Text(label, style = labelSmall(), color = Zinc500)
         Spacer(Modifier.weight(1f))
-        Text(value, style = ValueSmall, color = valueColor, maxLines = 1)
+        Text(value, style = valueSmall(), color = valueColor, maxLines = 1)
     }
 }
 
@@ -157,20 +169,20 @@ fun FtBigValue(
         modifier.then(clickable),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, style = LabelSmall, color = Zinc400)
+        Text(label, style = labelSmall(), color = Zinc400)
         Text(
             value,
             style = TextStyle(
                 fontFamily = MonoFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 92.sp,
+                fontSize = 92.sp * LocalDashScale.current,
                 fontFeatureSettings = "tnum",
             ),
             color = valueColor,
             maxLines = 1,
         )
         if (unit != null) {
-            Text(unit, style = LabelSmall, color = Zinc400)
+            Text(unit, style = labelSmall(), color = Zinc400)
         }
     }
 }
@@ -212,10 +224,10 @@ fun FtChannel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = LabelSmall, color = Zinc400, maxLines = 1)
+        Text(label, style = labelSmall(), color = Zinc400, maxLines = 1)
         Text(
             value ?: "--",
-            style = ValueSmall,
+            style = valueSmall(),
             color = if (value == null) Zinc500 else valueColor,
             maxLines = 1,
         )
@@ -256,11 +268,11 @@ fun FtTankGauge(
             ),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Tanque", style = LabelSmall, color = Zinc400)
+            Text("Tanque", style = labelSmall(), color = Zinc400)
             Spacer(Modifier.weight(1f))
             Text(
                 if (liters == null) "configurar" else "%.1f L".format(liters),
-                style = LabelSmall,
+                style = labelSmall(),
                 color = if (liters == null) Amber500 else color,
             )
         }
@@ -315,6 +327,6 @@ fun FtStatusBox(
             .border(1.dp, if (active) activeColor else Zinc800, RoundedCornerShape(2.dp))
             .padding(horizontal = 7.dp, vertical = 3.dp),
     ) {
-        Text(label, style = LabelSmall, color = if (active) activeColor else Zinc500)
+        Text(label, style = labelSmall(), color = if (active) activeColor else Zinc500)
     }
 }

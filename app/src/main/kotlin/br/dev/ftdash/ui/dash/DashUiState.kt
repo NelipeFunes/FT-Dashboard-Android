@@ -57,6 +57,7 @@ data class DashUiState(
     val sourceState: SourceState = SourceState.IDLE,
     val sourceDetail: String? = null,
     val hz: Float = 0f,
+    val bytesPerSec: Int = 0,
     val framesOk: Long = 0,
     val crcFail: Long = 0,
     val frameLen: Int = 0,

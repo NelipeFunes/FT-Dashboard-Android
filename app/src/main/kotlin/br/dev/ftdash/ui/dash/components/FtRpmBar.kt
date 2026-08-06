@@ -24,7 +24,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import br.dev.ftdash.ui.theme.LocalDashScale
 import br.dev.ftdash.ui.theme.MonoFamily
+import br.dev.ftdash.ui.theme.scaled
+import br.dev.ftdash.ui.theme.times
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc400
 import br.dev.ftdash.ui.theme.Zinc500
@@ -54,6 +57,7 @@ fun FtRpmBar(
     hasData: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val scale = LocalDashScale.current
     val safeMax = maxRpm.coerceAtLeast(1000)
     val blinking = hasData && rpm >= shiftRpm &&
         (System.currentTimeMillis() / SHIFT_BLINK_HALF_PERIOD_MS) % 2L == 0L
@@ -67,7 +71,7 @@ fun FtRpmBar(
     ) {
         // Número grande à esquerda, como na FT
         Row(
-            Modifier.width(190.dp),
+            Modifier.width(190.dp.scaled(scale)),
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
@@ -75,7 +79,7 @@ fun FtRpmBar(
                 style = TextStyle(
                     fontFamily = MonoFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 44.sp,
+                    fontSize = 44.sp * scale,
                     fontFeatureSettings = "tnum",
                 ),
                 color = if (blinking) FtRed else if (hasData) Zinc100 else Zinc500,
@@ -84,7 +88,7 @@ fun FtRpmBar(
             )
             Text(
                 "RPM",
-                style = TextStyle(fontFamily = MonoFamily, fontSize = 13.sp),
+                style = TextStyle(fontFamily = MonoFamily, fontSize = 13.sp * scale),
                 color = Zinc400,
                 modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
             )
@@ -96,7 +100,7 @@ fun FtRpmBar(
             Canvas(
                 Modifier
                     .fillMaxWidth()
-                    .height(30.dp),
+                    .height(30.dp.scaled(scale)),
             ) {
                 val w = size.width
                 val h = size.height
@@ -153,7 +157,7 @@ fun FtRpmBar(
                             i.toString(),
                             style = TextStyle(
                                 fontFamily = MonoFamily,
-                                fontSize = 11.sp,
+                                fontSize = 11.sp * scale,
                                 fontFeatureSettings = "tnum",
                             ),
                             color = Zinc400,

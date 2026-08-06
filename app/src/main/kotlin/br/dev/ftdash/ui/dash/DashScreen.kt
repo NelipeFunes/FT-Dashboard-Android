@@ -2,6 +2,7 @@ package br.dev.ftdash.ui.dash
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -26,6 +28,8 @@ import br.dev.ftdash.ui.dash.components.StatusBar
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.Red500
+import br.dev.ftdash.ui.theme.LocalDashScale
+import br.dev.ftdash.ui.theme.dashScaleFor
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc800
 import br.dev.ftdash.ui.theme.FtBlack
@@ -67,11 +71,25 @@ fun DashScreen(
     onFillTank: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .background(FtBlack),
-    ) {
+    BoxWithConstraints(modifier.fillMaxSize().background(FtBlack)) {
+        // A escala sai da altura disponível, não da densidade: numa central de
+        // 1280×720 sobrava espaço morto e os números continuavam do tamanho da
+        // tela de 1024×600, pequenos demais para ler de relance dirigindo.
+        CompositionLocalProvider(LocalDashScale provides dashScaleFor(maxHeight.value)) {
+            DashContent(state, onOpenCalibration, onToggleSource, onResetTrip, onFillTank)
+        }
+    }
+}
+
+@Composable
+private fun DashContent(
+    state: DashUiState,
+    onOpenCalibration: () -> Unit,
+    onToggleSource: () -> Unit,
+    onResetTrip: () -> Unit,
+    onFillTank: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
         FtRpmBar(
             rpm = state.rpm,
             peakRpm = state.peakRpm,
@@ -212,7 +230,9 @@ fun DashScreen(
             frameLen = state.frameLen,
             layoutKnown = state.layoutKnown,
             speedOrigin = state.speedOrigin,
+            bytesPerSec = state.bytesPerSec,
             onLongPress = onToggleSource,
+            onOpenConfig = onOpenCalibration,
         )
     }
 }

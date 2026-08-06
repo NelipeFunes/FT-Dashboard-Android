@@ -170,6 +170,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                         sourceKind = container.telemetryRepository.sourceKind.value,
                         hasData = if (lost) false else _state.value.hasData,
                         hz = if (restarting) 0f else _state.value.hz,
+                        bytesPerSec = if (restarting) 0 else _state.value.bytesPerSec,
                         framesOk = if (restarting) 0 else _state.value.framesOk,
                         crcFail = if (restarting) 0 else _state.value.crcFail,
                         frameLen = if (restarting) 0 else _state.value.frameLen,
@@ -179,6 +180,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                 is TelemetryEvent.Diagnostics -> {
                     _state.value = _state.value.copy(
                         hz = event.hz,
+                        bytesPerSec = event.bytesPerSec,
                         framesOk = event.framesOk,
                         crcFail = event.crcFail,
                     )
