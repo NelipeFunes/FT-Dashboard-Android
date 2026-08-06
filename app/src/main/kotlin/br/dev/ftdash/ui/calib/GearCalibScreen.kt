@@ -1,9 +1,12 @@
 package br.dev.ftdash.ui.calib
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,7 +74,7 @@ fun GearCalibScreen(
     onApplyFuel: () -> Unit,
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
-    onAddFuel: () -> Unit,
+    onAddFuel: (Double) -> Unit,
     onResetTrip: () -> Unit,
     onRescanUsb: () -> Unit,
     onUseUsb: () -> Unit,
@@ -422,9 +425,13 @@ private fun FuelModePanel(
     onApply: () -> Unit,
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
-    onAddFuel: () -> Unit,
+    onAddFuel: (Double) -> Unit,
     onResetTrip: () -> Unit,
 ) {
+    // Sem tanque, vazão e número de bicos, somar litros não significa nada —
+    // os botões ficam apagados em vez de aceitar um toque que não faz efeito.
+    val configured = state.fuelRemainingLiters != null
+
     Column(
         Modifier
             .fillMaxSize()
@@ -435,8 +442,7 @@ private fun FuelModePanel(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            "O nível sai do consumo dos bicos, não de boia. Preencha os três " +
-                "campos e aperte ENCHI O TANQUE ao abastecer.",
+            "O nível sai do consumo dos bicos, não de boia.",
             style = NumberSmall,
             color = Zinc400,
         )
@@ -477,46 +483,73 @@ private fun FuelModePanel(
             )
         }
 
-        Button(
-            onClick = onFillTank,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Zinc950,
-                contentColor = Zinc400,
-            ),
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("ENCHI O TANQUE", style = LabelStyle)
-        }
-
-        // Zerar o parcial mora aqui e não no painel: no painel era um toque
-        // longo invisível, fácil de acionar sem querer numa lombada e
-        // impossível de descobrir de propósito.
-        Button(
-            onClick = onResetTrip,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Zinc950,
-                contentColor = Zinc400,
-            ),
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("ZERAR PARCIAL E MEDIA", style = LabelStyle)
+        // Lado a lado para a aba caber inteira em 720p sem rolagem: com o
+        // usuário parado no posto, precisar arrastar para achar o botão é a
+        // diferença entre usar e desistir.
+        //
+        // Zerar o parcial mora aqui e não no painel: lá era um toque longo
+        // invisível, fácil de acionar sem querer numa lombada e impossível de
+        // descobrir de propósito.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(
+                onClick = onFillTank,
+                enabled = configured,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Zinc950,
+                    contentColor = Zinc400,
+                    disabledContainerColor = Zinc900,
+                    disabledContentColor = Zinc600,
+                ),
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("ENCHI", style = LabelStyle)
+            }
+            Button(
+                onClick = onResetTrip,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Zinc950,
+                    contentColor = Zinc400,
+                ),
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1.6f),
+            ) {
+                Text("ZERAR PARCIAL E MEDIA", style = LabelStyle)
+            }
         }
 
         // Abastecimento parcial: nem toda parada de posto é tanque cheio.
+        //
+        // Os valores redondos cobrem quase toda parada real e resolvem em um
+        // toque — digitar num teclado numérico dentro do carro, parado no
+        // posto, é o caminho lento. O campo livre continua para o resto.
+        Text("ABASTECI", style = LabelStyle, color = Zinc400)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (liters in QUICK_FUEL_LITERS) {
+                QuickFuelButton(liters, configured) { onAddFuel(liters.toDouble()) }
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             NumField(
-                "COLOQUEI",
+                "OUTRO",
                 state.addFuelLiters,
                 Modifier.weight(1f),
                 decimal = true,
                 placeholder = "litros",
             ) { onAddFuelField(it) }
             Spacer(Modifier.width(8.dp))
+            val typed = state.addFuelLiters.replace(',', '.').toDoubleOrNull()
             Button(
-                onClick = onAddFuel,
-                enabled = state.addFuelLiters.replace(',', '.').toDoubleOrNull()?.let { it > 0 } == true,
+                onClick = {
+                    typed?.let {
+                        onAddFuel(it)
+                        onAddFuelField("")
+                    }
+                },
+                enabled = configured && typed != null && typed > 0,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Emerald500,
                     contentColor = Zinc950,
@@ -528,6 +561,29 @@ private fun FuelModePanel(
                 Text("SOMAR", style = LabelStyle)
             }
         }
+    }
+}
+
+/** Litros dos botões de atalho — as quantias que se pede no posto. */
+private val QUICK_FUEL_LITERS = listOf(10, 15, 20, 25)
+
+@Composable
+private fun RowScope.QuickFuelButton(liters: Int, enabled: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Zinc950,
+            contentColor = Emerald500,
+            disabledContainerColor = Zinc900,
+            disabledContentColor = Zinc600,
+        ),
+        border = BorderStroke(1.dp, if (enabled) Emerald500 else Zinc800),
+        shape = RoundedCornerShape(4.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+        modifier = Modifier.weight(1f),
+    ) {
+        Text("+$liters L", style = LabelStyle)
     }
 }
 

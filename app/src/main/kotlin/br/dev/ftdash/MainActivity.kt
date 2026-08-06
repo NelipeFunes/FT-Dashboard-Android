@@ -141,12 +141,7 @@ private fun AppRoot(container: AppContainer) {
                 onApplyFuel = { calibViewModel.applyFuelSetup() },
                 onFillTank = { dashViewModel.fillTank() },
                 onAddFuelField = { calibViewModel.updateAddFuelField(it) },
-                onAddFuel = {
-                    calibViewModel.addFuelLitersValue()?.let { liters ->
-                        dashViewModel.addFuel(liters)
-                        calibViewModel.updateAddFuelField("")
-                    }
-                },
+                onAddFuel = { liters -> dashViewModel.addFuel(liters) },
                 onResetTrip = { dashViewModel.resetTrip() },
                 onRescanUsb = { calibViewModel.scanUsb() },
                 onUseUsb = { calibViewModel.useUsbSource() },
