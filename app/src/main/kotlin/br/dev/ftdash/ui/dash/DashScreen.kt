@@ -22,7 +22,6 @@ import br.dev.ftdash.ui.dash.components.FtGear
 import br.dev.ftdash.ui.dash.components.FtRpmBar
 import br.dev.ftdash.ui.dash.components.FtStatusBox
 import br.dev.ftdash.ui.dash.components.FtTankGauge
-import br.dev.ftdash.ui.dash.components.FtVerticalGauge
 import br.dev.ftdash.ui.dash.components.StatusBar
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
@@ -129,13 +128,11 @@ fun DashScreen(
                 tempColor(state.engineTempC, state.hasData),
                 Modifier.weight(1f),
             )
-            FtVerticalGauge(
-                label = "P.Oleo",
-                value = state.orNull(state.oilPressureBar),
-                min = 0f, max = 8f,
-                critBelow = 0.8f, warnBelow = 1.5f,
-                ticks = listOf(8, 4, 0),
-                modifier = Modifier.weight(1f),
+            FtChannel(
+                "P.Oleo",
+                state.fmt { "%.2f".format(state.oilPressureBar) },
+                pressureColor(state.oilPressureBar, state.hasData, crit = 0.8f, warn = 1.5f),
+                Modifier.weight(1f),
             )
             FtChannel(
                 "S Geral",
@@ -143,13 +140,11 @@ fun DashScreen(
                 lambdaColor(state.lambda, state.lambdaTarget),
                 Modifier.weight(1f),
             )
-            FtVerticalGauge(
-                label = "P.Comb",
-                value = state.orNull(state.fuelPressureBar),
-                min = 0f, max = 6f,
-                warnBelow = 2.5f,
-                ticks = listOf(6, 3, 0),
-                modifier = Modifier.weight(1f),
+            FtChannel(
+                "P.Comb",
+                state.fmt { "%.2f".format(state.fuelPressureBar) },
+                pressureColor(state.fuelPressureBar, state.hasData, crit = 1.5f, warn = 2.5f),
+                Modifier.weight(1f),
             )
             FtChannel(
                 "T.Ar",
@@ -252,6 +247,17 @@ private inline fun DashUiState.fmt(format: () -> String?): String? =
     if (hasData) format() else null
 
 private fun DashUiState.orNull(v: Float): Float? = if (hasData) v else null
+
+/**
+ * Cor das pressões. A faixa de alarme ficou onde estava quando eram barras —
+ * o que mudou foi só o desenho, não o que conta como pressão baixa.
+ */
+private fun pressureColor(value: Float, hasData: Boolean, crit: Float, warn: Float) = when {
+    !hasData -> Zinc100
+    value < crit -> Red500
+    value < warn -> Amber500
+    else -> Emerald500
+}
 
 private fun tempColor(temp: Float, hasData: Boolean) = when {
     !hasData -> Zinc100
