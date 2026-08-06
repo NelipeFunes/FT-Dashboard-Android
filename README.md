@@ -95,6 +95,25 @@ Ela existe porque a maior incógnita do projeto é se a porta USB da central faz
 tela, uma tentativa que falha no carro volta como "não funcionou"; com ela, volta sabendo qual é o caso —
 e se é do tipo que software resolve.
 
+## Ciclo de ignição
+
+Testado na AVD, em três frentes:
+
+| Cenário | Resultado |
+|---|---|
+| Processo morto e reaberto (3× seguidas) | volta streaming; pico de RPM, perfil de marcha e fonte escolhida intactos |
+| Tela apagada 20 s e religada | volta sozinho |
+| App em segundo plano 20 s (acima do `WhileSubscribed` de 5 s) | volta sozinho, sem ANR |
+
+**O que o app NÃO faz:** iniciar sozinho quando a central liga. Um receiver de `BOOT_COMPLETED` não
+resolveria — desde o Android 10 um app em segundo plano não pode abrir uma Activity, então ele falharia
+em silêncio. Os dois caminhos que funcionam de verdade:
+
+1. o `intent-filter` de `USB_DEVICE_ATTACHED` já no manifest, que **pode** abrir a Activity — se a
+   central entregar esse intent;
+2. marcar o FT Dash como app de inicialização nas configurações da própria central, que a maioria dessas
+   multimídias oferece.
+
 ## Quando for ligar o USB de verdade
 
 `UsbTelemetrySource` está completo (handshake, comando de configuração com token e CRC, reconexão), mas
