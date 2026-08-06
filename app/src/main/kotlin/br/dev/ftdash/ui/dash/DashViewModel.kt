@@ -113,7 +113,14 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                     container.simulatedSpeedSource.onRpm(t.rpm)
                     learnMaxRpm(t.rpm)
                     if (settingsLoaded) {
-                        trip.onInjection(t.tsMs, t.injDutyPct, fuelSetup)
+                        // O diferencial real sobre o bico: linha menos coletor.
+                        // Só é passado quando a leitura de pressão existe; sem
+                        // ela o cálculo usa a vazão nominal em vez de corrigir
+                        // por um número inventado.
+                        val differential = t.fuelPressureBar
+                            .takeIf { it > 0.5f }
+                            ?.let { (it - t.mapBar).toDouble() }
+                        trip.onInjection(t.tsMs, t.injDutyPct, fuelSetup, differential)
                         persistTripIfDue(t.tsMs)
                     }
 

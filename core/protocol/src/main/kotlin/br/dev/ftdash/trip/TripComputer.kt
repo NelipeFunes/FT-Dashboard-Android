@@ -12,9 +12,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class FuelSetup(
     val tankLiters: Double = 0.0,
-    /** Vazão nominal de UM bico, em cc/min. */
+    /** Vazão nominal de UM bico, em cc/min, na pressão de referência. */
     val injectorFlowCcMin: Double = 0.0,
     val injectorCount: Int = 0,
+    /**
+     * Pressão diferencial em que a vazão nominal foi medida.
+     *
+     * 3 bar é a convenção com que praticamente todo bico é especificado.
+     */
+    val ratedPressureBar: Double = 3.0,
 ) {
     val isComplete: Boolean
         get() = tankLiters > 0 && injectorFlowCcMin > 0 && injectorCount > 0
@@ -182,14 +188,48 @@ class TripComputer(initial: TripState = TripState()) {
      *
      * @param dutyPct abertura dos bicos, 0-100
      */
-    fun onInjection(tsMs: Long, dutyPct: Float, setup: FuelSetup) {
+    /**
+     * Corrige a vazão pela pressão diferencial real sobre o bico.
+     *
+     * O bico é uma válvula liga/desliga: aberto, ele passa uma vazão fixa pelo
+     * orifício, e é o **tempo aberto** que muda com a aceleração. Mas essa
+     * vazão fixa depende da diferença de pressão entre a linha e o coletor, e
+     * escoamento por orifício vai com a raiz da diferença:
+     *
+     * ```
+     * vazão_real = vazão_nominal · √(ΔP_real / ΔP_nominal)
+     * ```
+     *
+     * Neste carro isso importa. Medido nos 20.895 frames de estrada: a pressão
+     * da linha fica praticamente cravada em 3,30 bar (desvio de 0,05), ou seja
+     * o regulador **não** é referenciado ao coletor. Como o MAP varia de −0,93
+     * a −0,01 bar, o diferencial oscila de 3,19 a 4,47 bar — e a vazão real
+     * junto: √(4,47/3,19) = 1,18, ou seja **18% entre os extremos**. Ignorar
+     * isso seria errar sempre para o mesmo lado, consumindo mais em marcha
+     * lenta (muito vácuo) do que a conta admitiria.
+     *
+     * Sem leitura de pressão utilizável, devolve a vazão nominal sem inventar
+     * correção.
+     */
+    private fun effectiveFlowCcMin(setup: FuelSetup, differentialBar: Double?): Double {
+        if (differentialBar == null || setup.ratedPressureBar <= 0) return setup.injectorFlowCcMin
+        if (differentialBar !in MIN_DIFFERENTIAL_BAR..MAX_DIFFERENTIAL_BAR) return setup.injectorFlowCcMin
+        return setup.injectorFlowCcMin * kotlin.math.sqrt(differentialBar / setup.ratedPressureBar)
+    }
+
+    /**
+     * @param differentialBar pressão da linha menos a do coletor, em bar; null
+     *        quando não há leitura confiável
+     */
+    fun onInjection(tsMs: Long, dutyPct: Float, setup: FuelSetup, differentialBar: Double? = null) {
         val previous = lastFuelTsMs
         lastFuelTsMs = tsMs
         if (!setup.isComplete) return
         if (dutyPct < 0f || dutyPct > 100f) return
 
         // cc/min de todos os bicos com o duty atual
-        val ccPerMin = setup.injectorFlowCcMin * setup.injectorCount * (dutyPct / 100.0)
+        val ccPerMin = effectiveFlowCcMin(setup, differentialBar) *
+            setup.injectorCount * (dutyPct / 100.0)
         // O duty ZERO também entra na suavização: é o corte na desaceleração, e
         // ignorá-lo faria a média instantânea travar no último valor gasto em
         // vez de mostrar que o motor parou de consumir.
@@ -294,5 +334,9 @@ class TripComputer(initial: TripState = TripState()) {
 
         /** Teto do mostrador em corte, onde o consumo é zero e a conta é infinita. */
         const val MAX_INSTANT_KM_L = 99.9
+
+        /** Faixa em que um diferencial lido faz sentido; fora dela, não corrige. */
+        const val MIN_DIFFERENTIAL_BAR = 1.0
+        const val MAX_DIFFERENTIAL_BAR = 10.0
     }
 }

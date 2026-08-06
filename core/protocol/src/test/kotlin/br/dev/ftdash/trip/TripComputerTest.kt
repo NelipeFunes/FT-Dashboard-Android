@@ -342,6 +342,71 @@ class TripComputerTest {
     }
 
     @Test
+    fun `vazao e corrigida pela pressao diferencial`() {
+        // Escoamento por orifício vai com a raiz da diferença de pressão:
+        // a 4 bar de diferencial, um bico de 3 bar entrega √(4/3) = 1,155x.
+        val nominal = TripComputer()
+        val corrigido = TripComputer()
+        var t = 0L
+        repeat(601) {
+            nominal.onInjection(t, 30f, setup)
+            corrigido.onInjection(t, 30f, setup, differentialBar = 4.0)
+            t += 1000
+        }
+        val razao = corrigido.tankUsedLiters / nominal.tankUsedLiters
+        assertEquals(kotlin.math.sqrt(4.0 / 3.0), razao, 0.005)
+    }
+
+    @Test
+    fun `no diferencial nominal nada muda`() {
+        val a = TripComputer()
+        val b = TripComputer()
+        var t = 0L
+        repeat(601) {
+            a.onInjection(t, 30f, setup)
+            b.onInjection(t, 30f, setup, differentialBar = 3.0)
+            t += 1000
+        }
+        assertEquals(a.tankUsedLiters, b.tankUsedLiters, 1e-9)
+    }
+
+    @Test
+    fun `leitura de pressao absurda nao corrige`() {
+        // Sensor desconectado ou canal não configurado: melhor usar a vazão
+        // nominal do que multiplicar por um número sem sentido.
+        val nominal = TripComputer()
+        val comLixo = TripComputer()
+        var t = 0L
+        repeat(601) {
+            nominal.onInjection(t, 30f, setup)
+            comLixo.onInjection(t, 30f, setup, differentialBar = 0.0)
+            t += 1000
+        }
+        assertEquals(nominal.tankUsedLiters, comLixo.tankUsedLiters, 1e-9)
+    }
+
+    @Test
+    fun `vacuo alto consome mais que carga para o mesmo duty`() {
+        // Regulador de pressão fixa: em marcha lenta o diferencial é maior
+        // (linha 3,3 bar contra coletor em -0,9), então o mesmo tempo de bico
+        // aberto entrega mais combustível do que a plena carga.
+        val lenta = TripComputer()
+        val carga = TripComputer()
+        var t = 0L
+        repeat(601) {
+            lenta.onInjection(t, 20f, setup, differentialBar = 3.30 - (-0.90))
+            carga.onInjection(t, 20f, setup, differentialBar = 3.30 - (-0.01))
+            t += 1000
+        }
+        assertTrue(
+            "mais vácuo tem que dar mais vazão: ${lenta.tankUsedLiters} vs ${carga.tankUsedLiters}",
+            lenta.tankUsedLiters > carga.tankUsedLiters,
+        )
+        // √(4,20/3,31) = 1,127 — ou seja, 13% a mais de vazão em marcha lenta
+        assertEquals(1.127, lenta.tankUsedLiters / carga.tankUsedLiters, 0.01)
+    }
+
+    @Test
     fun `duty invalido e ignorado`() {
         val trip = TripComputer()
         var t = 0L
