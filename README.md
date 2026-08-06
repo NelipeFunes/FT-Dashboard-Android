@@ -14,7 +14,7 @@ partir de velocidade × RPM, com calibração).
 |---|---|
 | Parser do protocolo | **53 testes passando**, incluindo os 33.699 frames reais no CRC |
 | Lógica de marcha + calibração | pronta, coberta por teste |
-| Painel (UI) | compila, APK gerado — **ainda não visto rodando** (sem AVD nem aparelho) |
+| Painel (UI) | **rodando** e verificado em AVD Android 11, 1024×600 |
 | Leitura por USB | **escrita, mas nunca executada contra a ECU** — ver abaixo |
 
 A fonte padrão é o **replay** de frames reais gravados do carro (`app/src/main/assets/fixtures/replay-107.txt`),
