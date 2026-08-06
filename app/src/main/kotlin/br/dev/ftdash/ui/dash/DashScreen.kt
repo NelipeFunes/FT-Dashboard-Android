@@ -66,9 +66,8 @@ import kotlin.math.abs
 fun DashScreen(
     state: DashUiState,
     onOpenCalibration: () -> Unit,
+    onOpenFuelConfig: () -> Unit,
     onToggleSource: () -> Unit,
-    onResetTrip: () -> Unit,
-    onFillTank: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxSize().background(FtBlack)) {
@@ -76,7 +75,7 @@ fun DashScreen(
         // 1280×720 sobrava espaço morto e os números continuavam do tamanho da
         // tela de 1024×600, pequenos demais para ler de relance dirigindo.
         CompositionLocalProvider(LocalDashScale provides dashScaleFor(maxHeight.value)) {
-            DashContent(state, onOpenCalibration, onToggleSource, onResetTrip, onFillTank)
+            DashContent(state, onOpenCalibration, onOpenFuelConfig, onToggleSource)
         }
     }
 }
@@ -85,9 +84,8 @@ fun DashScreen(
 private fun DashContent(
     state: DashUiState,
     onOpenCalibration: () -> Unit,
+    onOpenFuelConfig: () -> Unit,
     onToggleSource: () -> Unit,
-    onResetTrip: () -> Unit,
-    onFillTank: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FtRpmBar(
@@ -108,7 +106,7 @@ private fun DashContent(
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OdometerPanelSlot(state, onResetTrip)
+            OdometerPanelSlot(state, onOpenFuelConfig)
             Spacer(Modifier.weight(0.06f))
             FtGear(
                 gear = state.gear,
@@ -205,7 +203,7 @@ private fun DashContent(
                 fraction = state.fuelRemainingFraction,
                 liters = state.fuelRemainingLiters,
                 tankLiters = state.tankLiters,
-                onFillTank = onFillTank,
+                onOpenConfig = onOpenFuelConfig,
                 modifier = Modifier.weight(0.40f),
             )
             FtChannel("MAP", state.fmt { "%+.2f".format(state.mapBar) }, Zinc100, Modifier.weight(0.14f))
@@ -250,14 +248,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.Divider() {
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.OdometerPanelSlot(
     state: DashUiState,
-    onResetTrip: () -> Unit,
+    onOpenConfig: () -> Unit,
 ) {
     br.dev.ftdash.ui.dash.components.OdometerPanel(
         totalKm = state.totalKm,
         tripKm = state.tripKm,
         averageKmPerLiter = state.averageKmPerLiter,
         instantKmPerLiter = state.instantKmPerLiter,
-        onResetTrip = onResetTrip,
+        onOpenConfig = onOpenConfig,
         modifier = Modifier.weight(0.28f),
     )
 }

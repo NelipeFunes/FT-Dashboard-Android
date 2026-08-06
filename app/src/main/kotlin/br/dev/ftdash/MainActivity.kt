@@ -7,8 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
@@ -76,16 +78,26 @@ private fun AppRoot(container: AppContainer) {
     // resolver um `if`.
     var screen by rememberSaveable { mutableStateOf(Screen.DASH) }
 
+    /** Aba em que a configuração deve abrir; null mantém a última usada. */
+    var pendingTab by remember { mutableStateOf<CalibMode?>(null) }
+
     val dashViewModel: DashViewModel = viewModel(factory = factory { DashViewModel(container) })
     val dashState by dashViewModel.state.collectAsStateWithLifecycle()
 
     when (screen) {
         Screen.DASH -> DashScreen(
             state = dashState,
-            onOpenCalibration = { screen = Screen.CALIBRATION },
+            onOpenCalibration = {
+                pendingTab = null
+                screen = Screen.CALIBRATION
+            },
+            // O painel manda em qual aba a configuração abre: tocar no tanque
+            // e cair na aba de marchas seria mandar o usuário procurar.
+            onOpenFuelConfig = {
+                pendingTab = CalibMode.FUEL
+                screen = Screen.CALIBRATION
+            },
             onToggleSource = { dashViewModel.selectSource(nextSource(dashState.sourceKind)) },
-            onResetTrip = { dashViewModel.resetTrip() },
-            onFillTank = { dashViewModel.fillTank() },
         )
 
         Screen.CALIBRATION -> {
@@ -93,6 +105,13 @@ private fun AppRoot(container: AppContainer) {
                 factory = factory { GearCalibViewModel(container, dashViewModel) },
             )
             val calibState by calibViewModel.state.collectAsStateWithLifecycle()
+
+            LaunchedEffect(pendingTab) {
+                pendingTab?.let {
+                    calibViewModel.setMode(it)
+                    pendingTab = null
+                }
+            }
 
             GearCalibScreen(
                 state = calibState,
@@ -128,6 +147,7 @@ private fun AppRoot(container: AppContainer) {
                         calibViewModel.updateAddFuelField("")
                     }
                 },
+                onResetTrip = { dashViewModel.resetTrip() },
                 onRescanUsb = { calibViewModel.scanUsb() },
                 onUseUsb = { calibViewModel.useUsbSource() },
                 onUseReplay = { calibViewModel.useReplaySource() },

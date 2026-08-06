@@ -3,6 +3,7 @@ package br.dev.ftdash.ui.dash.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -70,27 +71,24 @@ private fun valueSmall(): TextStyle {
  * Odômetro total e parcial, como na FT.
  *
  * A distância é integrada da velocidade do GPS — a ECU deste carro não recebe
- * sensor de roda. Toque longo zera o parcial.
+ * sensor de roda.
+ *
+ * Toque abre a configuração; zerar o parcial virou botão escrito lá dentro. O
+ * toque longo que zerava daqui era invisível e irreversível — ruim de descobrir
+ * e fácil de acionar sem querer.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OdometerPanel(
     totalKm: Double,
     tripKm: Double,
     averageKmPerLiter: Double?,
     instantKmPerLiter: Double?,
-    onResetTrip: () -> Unit,
+    onOpenConfig: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interaction = remember { MutableInteractionSource() }
     Column(
         modifier
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = { },
-                onLongClick = onResetTrip,
-            )
+            .clickable(onClick = onOpenConfig)
             .padding(horizontal = 8.dp),
     ) {
         Text(
@@ -238,19 +236,23 @@ fun FtChannel(
  * A barra do tanque, com escala 0/meio/cheio.
  *
  * O nível não vem de boia nenhuma: é o tanque configurado menos o combustível
- * que passou pelos bicos desde o último "enchi o tanque". Toque longo aqui é o
- * botão de encher.
+ * que passou pelos bicos desde o último abastecimento.
+ *
+ * **Toque simples abre a configuração.** Antes a palavra "configurar" aparecia
+ * aqui como rótulo e não respondia a toque nenhum — convite claro para uma ação
+ * que não existia —, enquanto um toque longo escondido enchia o tanque. Um
+ * gesto invisível que zera o medidor de combustível, num painel usado com o
+ * carro andando, é o tipo de coisa que se aciona sem querer numa lombada.
+ * Encher e abastecer agora são botões escritos, na tela de configuração.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FtTankGauge(
     fraction: Float?,
     liters: Double?,
     tankLiters: Double,
-    onFillTank: () -> Unit,
+    onOpenConfig: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interaction = remember { MutableInteractionSource() }
     val color = when {
         fraction == null -> Zinc500
         fraction < 0.10f -> FtRed
@@ -258,20 +260,14 @@ fun FtTankGauge(
         else -> Emerald500
     }
 
-    Column(
-        modifier
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = { },
-                onLongClick = onFillTank,
-            ),
-    ) {
+    Column(modifier.clickable(onClick = onOpenConfig)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Tanque", style = labelSmall(), color = Zinc400)
             Spacer(Modifier.weight(1f))
+            // Sublinhado quando falta configurar: é o que diferencia um rótulo
+            // de um convite a tocar. Sem isso a palavra parecia botão sem ser.
             Text(
-                if (liters == null) "configurar" else "%.1f L".format(liters),
+                if (liters == null) "CONFIGURAR ›" else "%.1f L".format(liters),
                 style = labelSmall(),
                 color = if (liters == null) Amber500 else color,
             )

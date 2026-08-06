@@ -72,6 +72,7 @@ fun GearCalibScreen(
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
     onAddFuel: () -> Unit,
+    onResetTrip: () -> Unit,
     onRescanUsb: () -> Unit,
     onUseUsb: () -> Unit,
     onUseReplay: () -> Unit,
@@ -110,7 +111,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
-                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel)
+                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onResetTrip)
                     CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
@@ -422,6 +423,7 @@ private fun FuelModePanel(
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
     onAddFuel: () -> Unit,
+    onResetTrip: () -> Unit,
 ) {
     Column(
         Modifier
@@ -485,6 +487,21 @@ private fun FuelModePanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("ENCHI O TANQUE", style = LabelStyle)
+        }
+
+        // Zerar o parcial mora aqui e não no painel: no painel era um toque
+        // longo invisível, fácil de acionar sem querer numa lombada e
+        // impossível de descobrir de propósito.
+        Button(
+            onClick = onResetTrip,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Zinc950,
+                contentColor = Zinc400,
+            ),
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("ZERAR PARCIAL E MEDIA", style = LabelStyle)
         }
 
         // Abastecimento parcial: nem toda parada de posto é tanque cheio.
