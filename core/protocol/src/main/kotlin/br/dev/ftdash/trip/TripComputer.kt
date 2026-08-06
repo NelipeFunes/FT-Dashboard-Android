@@ -18,6 +18,27 @@ data class FuelSetup(
 ) {
     val isComplete: Boolean
         get() = tankLiters > 0 && injectorFlowCcMin > 0 && injectorCount > 0
+
+    companion object {
+        /**
+         * lb/h → cc/min, na convenção da indústria: gasolina a 0,72 g/cc.
+         *
+         * `453,592 g/lb ÷ 0,72 g/cc ÷ 60 min/h ≈ 10,5`
+         *
+         * Existe porque a FuelTech trabalha em **lb/h**, não em cc/min — o
+         * FTManager, o site e o material de treinamento dela usam lb/h. Obrigar
+         * a converter à mão antes de digitar é convite a erro de conta num
+         * número que multiplica todo o cálculo de combustível.
+         *
+         * A conversão é de massa para volume, então depende da densidade. O
+         * fator abaixo é o da gasolina, que é como os bicos são especificados.
+         * Com etanol o volume real é ~9% maior para a mesma massa — quem usa
+         * etanol deve digitar direto em cc/min.
+         */
+        const val LB_H_TO_CC_MIN = 10.5
+
+        fun lbPerHourToCcMin(lbh: Double): Double = lbh * LB_H_TO_CC_MIN
+    }
 }
 
 /** Estado acumulado do computador de bordo. Persistido entre sessões. */

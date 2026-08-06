@@ -143,6 +143,8 @@ private fun AppRoot(container: AppContainer) {
                 onAddFuelField = { calibViewModel.updateAddFuelField(it) },
                 onAddFuel = { liters -> dashViewModel.addFuel(liters) },
                 onResetTrip = { dashViewModel.resetTrip() },
+                onSetInjectorUnit = { calibViewModel.setInjectorUnit(it) },
+                flowCcMin = calibViewModel.injectorFlowCcMin(),
                 onRescanUsb = { calibViewModel.scanUsb() },
                 onUseUsb = { calibViewModel.useUsbSource() },
                 onUseReplay = { calibViewModel.useReplaySource() },

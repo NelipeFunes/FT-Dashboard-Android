@@ -76,6 +76,8 @@ fun GearCalibScreen(
     onAddFuelField: (String) -> Unit,
     onAddFuel: (Double) -> Unit,
     onResetTrip: () -> Unit,
+    onSetInjectorUnit: (InjectorUnit) -> Unit,
+    flowCcMin: Double?,
     onRescanUsb: () -> Unit,
     onUseUsb: () -> Unit,
     onUseReplay: () -> Unit,
@@ -114,7 +116,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
-                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onResetTrip)
+                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onResetTrip, onSetInjectorUnit, flowCcMin)
                     CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
@@ -427,6 +429,8 @@ private fun FuelModePanel(
     onAddFuelField: (String) -> Unit,
     onAddFuel: (Double) -> Unit,
     onResetTrip: () -> Unit,
+    onSetInjectorUnit: (InjectorUnit) -> Unit,
+    flowCcMin: Double?,
 ) {
     // Sem tanque, vazão e número de bicos, somar litros não significa nada —
     // os botões ficam apagados em vez de aceitar um toque que não faz efeito.
@@ -450,8 +454,29 @@ private fun FuelModePanel(
         NumField("TANQUE", state.tankLiters, Modifier.fillMaxWidth(), placeholder = "litros") {
             onField(it, null, null)
         }
-        NumField("BICO", state.injectorFlow, Modifier.fillMaxWidth(), placeholder = "cc/min de UM bico") {
-            onField(null, it, null)
+        // A FuelTech trabalha em lb/h; o cálculo trabalha em cc/min. Aceitar as
+        // duas e mostrar a conversão ao vivo evita que o número mais sensível
+        // da conta dependa de uma multiplicação feita de cabeça.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            NumField(
+                "BICO",
+                state.injectorFlow,
+                Modifier.weight(1f),
+                decimal = true,
+                placeholder = "vazao de UM bico",
+            ) { onField(null, it, null) }
+            Spacer(Modifier.width(6.dp))
+            for (unit in InjectorUnit.entries) {
+                ModeTab(unit.label, state.injectorUnit == unit) { onSetInjectorUnit(unit) }
+                Spacer(Modifier.width(4.dp))
+            }
+        }
+        if (state.injectorUnit == InjectorUnit.LB_H && flowCcMin != null) {
+            Text(
+                "= %.0f cc/min  (gasolina, 0,72 g/cc)".format(flowCcMin),
+                style = NumberSmall,
+                color = Zinc500,
+            )
         }
         NumField("QUANTOS", state.injectorCount, Modifier.fillMaxWidth(), placeholder = "n. de bicos") {
             onField(null, null, it)

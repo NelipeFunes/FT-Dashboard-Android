@@ -20,6 +20,19 @@ import kotlinx.coroutines.launch
 
 enum class CalibMode { LEARN, MANUAL, RPM, FUEL, USB }
 
+/**
+ * Unidade da vazão do bico.
+ *
+ * A FuelTech trabalha em **lb/h** — o FTManager, o site e o material de
+ * treinamento dela usam essa unidade. Obrigar a converter à mão antes de
+ * digitar é convite a erro de conta num número que multiplica todo o cálculo de
+ * combustível, então o app aceita as duas e converte.
+ */
+enum class InjectorUnit(val label: String) {
+    CC_MIN("cc/min"),
+    LB_H("lb/h"),
+}
+
 data class CalibUiState(
     val mode: CalibMode = CalibMode.LEARN,
     val profile: GearProfile = GearProfile(),
@@ -50,6 +63,8 @@ data class CalibUiState(
     // --- aba de combustível ---
     val tankLiters: String = "",
     val injectorFlow: String = "",
+    /** Unidade em que o campo do bico está sendo digitado. */
+    val injectorUnit: InjectorUnit = InjectorUnit.CC_MIN,
     val injectorCount: String = "",
     val fuelUsedLiters: Double = 0.0,
     val fuelRemainingLiters: Double? = null,
@@ -144,6 +159,20 @@ class GearCalibViewModel(
         )
     }
 
+    fun setInjectorUnit(unit: InjectorUnit) {
+        _state.value = _state.value.copy(injectorUnit = unit, message = null)
+    }
+
+    /** Vazão digitada, sempre em cc/min — é como o cálculo trabalha. */
+    fun injectorFlowCcMin(): Double? {
+        val typed = _state.value.injectorFlow.replace(',', '.').toDoubleOrNull() ?: return null
+        if (typed <= 0) return null
+        return when (_state.value.injectorUnit) {
+            InjectorUnit.CC_MIN -> typed
+            InjectorUnit.LB_H -> FuelSetup.lbPerHourToCcMin(typed)
+        }
+    }
+
     fun updateAddFuelField(liters: String) {
         _state.value = _state.value.copy(addFuelLiters = liters, message = null)
     }
@@ -156,7 +185,7 @@ class GearCalibViewModel(
         val s = _state.value
         val setup = FuelSetup(
             tankLiters = s.tankLiters.replace(',', '.').toDoubleOrNull() ?: 0.0,
-            injectorFlowCcMin = s.injectorFlow.replace(',', '.').toDoubleOrNull() ?: 0.0,
+            injectorFlowCcMin = injectorFlowCcMin() ?: 0.0,
             injectorCount = s.injectorCount.toIntOrNull() ?: 0,
         )
         if (!setup.isComplete) {
