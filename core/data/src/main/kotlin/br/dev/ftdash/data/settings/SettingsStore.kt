@@ -47,7 +47,13 @@ data class AppSettings(
     val maxRpm: Int = 0,
     val fuelSetup: FuelSetup = FuelSetup(),
     val trip: TripState = TripState(),
-    val sourceKind: SourceKind = SourceKind.REPLAY,
+    /**
+     * USB por padrão: o app existe para ler a ECU, e numa central de carro a
+     * primeira coisa que ele deve tentar é o cabo. Se não houver FT no
+     * barramento, o painel diz o que encontrou e o replay fica a um toque longo
+     * na barra de status.
+     */
+    val sourceKind: SourceKind = SourceKind.USB,
     val replaySpeed: Float = 1.0f,
     /** Com o replay, sintetiza velocidade a partir do RPM em vez de usar o GPS. */
     val useSimulatedSpeed: Boolean = true,
@@ -92,21 +98,32 @@ class SettingsStore(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /**
+     * Os padrões vêm de [AppSettings], nunca repetidos aqui.
+     *
+     * Declarar o mesmo padrão nos dois lugares já enganou uma vez: trocar o
+     * padrão da data class para USB não teve efeito nenhum, porque este
+     * mapeamento tinha `?: SourceKind.REPLAY` escrito à mão e é ele quem
+     * decide. Com uma instância de referência, mudar o padrão num lugar só
+     * passa a valer de verdade.
+     */
+    private val defaults = AppSettings()
+
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             gearProfile = prefs[KEY_GEAR_PROFILE]
                 ?.let { runCatching { json.decodeFromString<GearProfile>(it) }.getOrNull() }
-                ?: GearProfile(),
+                ?: defaults.gearProfile,
             rpmScaleMode = prefs[KEY_RPM_MODE]
                 ?.let { runCatching { RpmScaleMode.valueOf(it) }.getOrNull() }
-                ?: RpmScaleMode.AUTO,
-            learnedMaxRpm = prefs[KEY_LEARNED_MAX] ?: 0,
-            redlineRpm = prefs[KEY_REDLINE] ?: 0,
-            shiftRpm = prefs[KEY_SHIFT] ?: 0,
-            maxRpm = prefs[KEY_MAX_RPM] ?: 0,
+                ?: defaults.rpmScaleMode,
+            learnedMaxRpm = prefs[KEY_LEARNED_MAX] ?: defaults.learnedMaxRpm,
+            redlineRpm = prefs[KEY_REDLINE] ?: defaults.redlineRpm,
+            shiftRpm = prefs[KEY_SHIFT] ?: defaults.shiftRpm,
+            maxRpm = prefs[KEY_MAX_RPM] ?: defaults.maxRpm,
             sourceKind = prefs[KEY_SOURCE]
                 ?.let { runCatching { SourceKind.valueOf(it) }.getOrNull() }
-                ?: SourceKind.REPLAY,
+                ?: defaults.sourceKind,
             fuelSetup = FuelSetup(
                 tankLiters = prefs[KEY_TANK_LITERS]?.toDouble() ?: 0.0,
                 injectorFlowCcMin = prefs[KEY_INJECTOR_FLOW]?.toDouble() ?: 0.0,
@@ -118,8 +135,9 @@ class SettingsStore(private val context: Context) {
                 tripFuelLiters = prefs[KEY_TRIP_FUEL]?.toDouble() ?: 0.0,
                 tankUsedLiters = prefs[KEY_TANK_USED]?.toDouble() ?: 0.0,
             ),
-            replaySpeed = prefs[KEY_REPLAY_SPEED] ?: 1.0f,
-            useSimulatedSpeed = (prefs[KEY_SIMULATED_SPEED] ?: 1) == 1,
+            replaySpeed = prefs[KEY_REPLAY_SPEED] ?: defaults.replaySpeed,
+            useSimulatedSpeed = prefs[KEY_SIMULATED_SPEED]?.let { it == 1 }
+                ?: defaults.useSimulatedSpeed,
         )
     }
 

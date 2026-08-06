@@ -23,6 +23,13 @@ class TelemetryRepository(
     private val sources: Map<SourceKind, TelemetrySource>,
 ) {
 
+    /**
+     * Começa no replay e só troca quando as preferências chegam do disco.
+     *
+     * Não é o padrão do app — é o estado dos primeiros milissegundos, antes de
+     * saber qual fonte o usuário escolheu. Sair tentando USB aqui só faria o
+     * painel piscar um erro de conexão em toda abertura.
+     */
     private val _sourceKind = MutableStateFlow(SourceKind.REPLAY)
     val sourceKind: StateFlow<SourceKind> = _sourceKind.asStateFlow()
 

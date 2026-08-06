@@ -18,8 +18,24 @@ android {
         // Android 9-11 e o app é sideload, não Play Store — subir o targetSdk
         // só traria restrições novas sem nenhum ganho aqui.
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.9.0"
+    }
+
+    signingConfigs {
+        // Assinado com a chave de debug de propósito.
+        //
+        // O app é sideload numa multimídia, nunca vai para a Play Store, e uma
+        // chave própria só traria um segredo a mais para guardar e perder. O
+        // que importa aqui é o APK ser instalável e o build ser release — o
+        // `debuggable = false` é o que tira a penalidade de desempenho que
+        // atrapalharia um painel redesenhando a 17 Hz.
+        create("sideload") {
+            storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -27,8 +43,13 @@ android {
             isMinifyEnabled = false
         }
         release {
+            // R8 desligado: o ganho seria de tamanho, e o risco é quebrar em
+            // tempo de execução a serialização do perfil de marchas — coisa
+            // que só apareceria dentro do carro. Não vale a troca no primeiro
+            // teste de campo.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("sideload")
         }
     }
 
