@@ -84,15 +84,24 @@ class GearEstimator(
     fun onSpeed(tsMs: Long, kmh: Float?): GearState {
         val rpm = averageRpmAround(tsMs)
 
-        if (kmh == null || kmh < MIN_KMH || rpm == null || rpm < MIN_RPM || !profile.isCalibrated) {
+        if (kmh == null || kmh < MIN_KMH || rpm == null || rpm < MIN_RPM) {
             instantRatio = null
             resetCandidate()
             state = GearState.Unknown
             return state
         }
 
+        // A razão é medida ANTES de checar a calibração: é justamente o número
+        // que a tela de aprendizado mostra ao vivo, e ali o perfil ainda está
+        // vazio por definição. Só o casamento de marcha depende do perfil.
         val ratio = rpm / kmh.toDouble()
         instantRatio = ratio
+
+        if (!profile.isCalibrated) {
+            resetCandidate()
+            state = GearState.Unknown
+            return state
+        }
 
         val best = profile.ratios
             .filter { it.rpmPerKmh > 0 }

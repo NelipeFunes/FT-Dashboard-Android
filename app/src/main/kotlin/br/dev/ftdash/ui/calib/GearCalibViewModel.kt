@@ -3,6 +3,7 @@ package br.dev.ftdash.ui.calib
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.dev.ftdash.AppContainer
+import br.dev.ftdash.data.settings.RpmScaleMode
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.GearRatio
 import br.dev.ftdash.gearing.RatioSource
@@ -14,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class CalibMode { LEARN, MANUAL }
+enum class CalibMode { LEARN, MANUAL, RPM }
 
 data class CalibUiState(
     val mode: CalibMode = CalibMode.LEARN,
@@ -29,11 +30,19 @@ data class CalibUiState(
     val rpm: Int = 0,
 
     // --- modo manual ---
-    val tireWidth: String = "195",
-    val tireProfile: String = "55",
-    val tireRim: String = "15",
-    val finalDrive: String = "4.25",
-    val gearboxRatios: List<String> = listOf("3.25", "1.90", "1.36", "1.03", "0.85"),
+    // Vazios de propósito: o app não inventa dados do carro do usuário.
+    val tireWidth: String = "",
+    val tireProfile: String = "",
+    val tireRim: String = "",
+    val finalDrive: String = "",
+    val gearboxRatios: List<String> = List(5) { "" },
+
+    // --- aba de RPM ---
+    val rpmScaleMode: RpmScaleMode = RpmScaleMode.AUTO,
+    val learnedMaxRpm: Int = 0,
+    val manualRedline: String = "",
+    val manualShift: String = "",
+    val manualMaxRpm: String = "",
 
     val message: String? = null,
 )
@@ -67,6 +76,14 @@ class GearCalibViewModel(
                         .takeIf { it.isNotEmpty() }
                         ?.map { it.toString() }
                         ?: _state.value.gearboxRatios,
+                    rpmScaleMode = s.rpmScaleMode,
+                    learnedMaxRpm = s.learnedMaxRpm,
+                    manualRedline = s.redlineRpm.takeIf { it > 0 }?.toString()
+                        ?: _state.value.manualRedline,
+                    manualShift = s.shiftRpm.takeIf { it > 0 }?.toString()
+                        ?: _state.value.manualShift,
+                    manualMaxRpm = s.maxRpm.takeIf { it > 0 }?.toString()
+                        ?: _state.value.manualMaxRpm,
                 )
             }
         }
@@ -177,6 +194,51 @@ class GearCalibViewModel(
             GearRatio(gear, rpmPerKmh, RatioSource.EDITED, System.currentTimeMillis()),
         )
         container.settingsStore.saveGearProfile(updated)
+    }
+
+    // ---- aba de RPM ----
+
+    fun setRpmScaleMode(mode: RpmScaleMode) = viewModelScope.launch {
+        container.settingsStore.saveRpmScaleMode(mode)
+    }
+
+    fun updateRpmField(redline: String? = null, shift: String? = null, max: String? = null) {
+        val s = _state.value
+        _state.value = s.copy(
+            manualRedline = redline ?: s.manualRedline,
+            manualShift = shift ?: s.manualShift,
+            manualMaxRpm = max ?: s.manualMaxRpm,
+            message = null,
+        )
+    }
+
+    fun applyRpmLimits() = viewModelScope.launch {
+        val s = _state.value
+        val redline = s.manualRedline.toIntOrNull()
+        val shift = s.manualShift.toIntOrNull()
+        val max = s.manualMaxRpm.toIntOrNull()
+
+        if (redline == null || redline !in 1_000..12_000) {
+            _state.value = s.copy(message = "Corte precisa estar entre 1.000 e 12.000 rpm.")
+            return@launch
+        }
+        // Escala e aviso têm ordem obrigatória; sem isso a barra fica sem
+        // sentido (aviso depois do corte, corte fora da escala).
+        val effectiveMax = (max ?: redline).coerceAtLeast(redline)
+        val effectiveShift = (shift ?: redline).coerceIn(500, redline)
+
+        container.settingsStore.saveRpmLimits(redline, effectiveShift, effectiveMax)
+        container.settingsStore.saveRpmScaleMode(RpmScaleMode.MANUAL)
+        _state.value = _state.value.copy(
+            manualShift = effectiveShift.toString(),
+            manualMaxRpm = effectiveMax.toString(),
+            message = "Corte em $redline rpm, aviso em $effectiveShift, escala até $effectiveMax.",
+        )
+    }
+
+    fun resetLearnedMax() = viewModelScope.launch {
+        container.settingsStore.resetLearnedMaxRpm()
+        _state.value = _state.value.copy(message = "Pico zerado — vai reaprender na próxima subida de giro.")
     }
 
     private fun parseTire(s: CalibUiState): TireSpec? {

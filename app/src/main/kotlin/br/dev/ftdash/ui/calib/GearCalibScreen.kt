@@ -14,18 +14,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import br.dev.ftdash.data.settings.RpmScaleMode
+import br.dev.ftdash.ui.theme.Zinc600
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.RatioCapture
 import br.dev.ftdash.gearing.RatioSource
@@ -38,6 +41,7 @@ import br.dev.ftdash.ui.theme.NumberMedium
 import br.dev.ftdash.ui.theme.NumberSmall
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc400
+import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc500
 import br.dev.ftdash.ui.theme.Zinc800
 import br.dev.ftdash.ui.theme.Zinc900
@@ -58,6 +62,10 @@ fun GearCalibScreen(
     onEditRatio: (Int, Double) -> Unit,
     onManualField: (String?, String?, String?, String?, Int?, String?) -> Unit,
     onApplyManual: () -> Unit,
+    onSetRpmMode: (RpmScaleMode) -> Unit,
+    onRpmField: (String?, String?, String?) -> Unit,
+    onApplyRpm: () -> Unit,
+    onResetPeak: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -69,11 +77,13 @@ fun GearCalibScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("CALIBRACAO DE MARCHA", style = LabelStyle, color = Zinc400)
+            Text("CONFIGURACAO", style = LabelStyle, color = Zinc400)
             Spacer(Modifier.weight(1f))
-            ModeTab("APRENDER NO CARRO", state.mode == CalibMode.LEARN) { onSetMode(CalibMode.LEARN) }
+            ModeTab("APRENDER", state.mode == CalibMode.LEARN) { onSetMode(CalibMode.LEARN) }
             Spacer(Modifier.width(6.dp))
-            ModeTab("RELACOES MANUAIS", state.mode == CalibMode.MANUAL) { onSetMode(CalibMode.MANUAL) }
+            ModeTab("RELACOES", state.mode == CalibMode.MANUAL) { onSetMode(CalibMode.MANUAL) }
+            Spacer(Modifier.width(6.dp))
+            ModeTab("RPM", state.mode == CalibMode.RPM) { onSetMode(CalibMode.RPM) }
             Spacer(Modifier.width(12.dp))
             TextButton(onClick = onClose) { Text("FECHAR", style = LabelStyle, color = Zinc400) }
         }
@@ -86,6 +96,7 @@ fun GearCalibScreen(
                 when (state.mode) {
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
+                    CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
                 }
             }
             Box(Modifier.weight(0.45f)) {
@@ -162,21 +173,24 @@ private fun LearnModePanel(
             LiveValue("RAZAO", state.instantRatio?.let { "%.1f".format(it) } ?: "--")
         }
 
+        // O texto explica o que falta para o botão liberar. Dizer "estavel" com
+        // o botão desabilitado, sem falar da velocidade, deixa o usuário
+        // achando que o app travou.
         val cv = state.stabilityCv
+        val kmh = state.speedKmh
         Column {
             Text("ESTABILIDADE", style = LabelStyle, color = Zinc400)
             Text(
                 when {
-                    cv == null -> "sem amostras"
+                    kmh == null -> "sem velocidade — o GPS precisa de fixação"
+                    kmh < RatioCapture.MIN_CAPTURE_KMH ->
+                        "acelere acima de %.0f km/h".format(RatioCapture.MIN_CAPTURE_KMH)
+                    cv == null -> "coletando amostras..."
                     cv <= RatioCapture.MAX_CV -> "estavel (%.1f%% de variacao)".format(cv * 100)
-                    else -> "instavel (%.1f%% de variacao)".format(cv * 100)
+                    else -> "instavel (%.1f%%) — segure a velocidade".format(cv * 100)
                 },
                 style = NumberSmall,
-                color = when {
-                    cv == null -> Zinc500
-                    cv <= RatioCapture.MAX_CV -> Emerald500
-                    else -> Amber500
-                },
+                color = if (state.canCapture) Emerald500 else Amber500,
             )
         }
 
@@ -216,47 +230,54 @@ private fun ManualModePanel(
             .fillMaxSize()
             .background(Zinc900, RoundedCornerShape(4.dp))
             .border(1.dp, Zinc800, RoundedCornerShape(4.dp))
-            .padding(12.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        // 5 marchas + pneu + diferencial + botão têm que caber sem rolar: o
+        // usuário mexe nisso parado no acostamento, não sentado à mesa.
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Text("PNEU", style = LabelStyle, color = Zinc400)
+        Text("PNEU  (ex.: 195 / 55 R15)", style = LabelStyle, color = Zinc400)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NumField("Largura", state.tireWidth, Modifier.weight(1f)) {
+            NumField("", state.tireWidth, Modifier.weight(1f), placeholder = "largura") {
                 onField(it, null, null, null, null, null)
             }
-            NumField("Perfil", state.tireProfile, Modifier.weight(1f)) {
+            NumField("", state.tireProfile, Modifier.weight(1f), placeholder = "perfil") {
                 onField(null, it, null, null, null, null)
             }
-            NumField("Aro", state.tireRim, Modifier.weight(1f)) {
+            NumField("", state.tireRim, Modifier.weight(1f), placeholder = "aro") {
                 onField(null, null, it, null, null, null)
             }
         }
 
-        Text("DIFERENCIAL", style = LabelStyle, color = Zinc400)
-        NumField("Relacao final", state.finalDrive, Modifier.fillMaxWidth(), decimal = true) {
-            onField(null, null, null, it, null, null)
-        }
+        NumField(
+            "DIFEREN.",
+            state.finalDrive,
+            Modifier.fillMaxWidth(),
+            decimal = true,
+            placeholder = "relacao final",
+        ) { onField(null, null, null, it, null, null) }
 
         Text("RELACOES DA CAIXA", style = LabelStyle, color = Zinc400)
         state.gearboxRatios.forEachIndexed { i, value ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                NumField("${i + 1}a", value, Modifier.width(120.dp), decimal = true) {
-                    onField(null, null, null, null, i, it)
-                }
-                Spacer(Modifier.width(10.dp))
+                NumField(
+                    "${i + 1}a",
+                    value,
+                    Modifier.width(150.dp),
+                    decimal = true,
+                    placeholder = "—",
+                ) { onField(null, null, null, null, i, it) }
+                Spacer(Modifier.width(8.dp))
                 val ratio = preview.firstOrNull { it.first == i + 1 }?.second
                 Text(
                     if (ratio == null) {
-                        "--"
+                        ""
                     } else {
-                        "%.1f rpm/km/h · 3.000 rpm = %.0f km/h".format(
-                            ratio,
-                            TireCalc.kmhAt(3000, ratio),
-                        )
+                        "%.1f rpm/km/h · 3.000 = %.0f km/h".format(ratio, TireCalc.kmhAt(3000, ratio))
                     },
                     style = NumberSmall,
                     color = Zinc500,
+                    maxLines = 1,
                 )
             }
         }
@@ -271,6 +292,97 @@ private fun ManualModePanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("CALCULAR E SALVAR", style = LabelStyle)
+        }
+    }
+}
+
+/**
+ * Escala da barra de RPM: automática ou manual.
+ *
+ * O automático copia o comportamento da FT — o teto é sempre o RPM mais alto já
+ * registrado, e ele não recua sozinho. Enquanto o motor não passar de 4.300, a
+ * barra vai até 4.300; no dia que passar, o novo valor vira o teto e fica. Por
+ * isso existe o botão de zerar: é a única forma de fazer o teto descer, útil
+ * depois de um pico esquisito ou de uma troca de motor.
+ */
+@Composable
+private fun RpmModePanel(
+    state: CalibUiState,
+    onSetMode: (RpmScaleMode) -> Unit,
+    onField: (String?, String?, String?) -> Unit,
+    onApply: () -> Unit,
+    onResetPeak: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Zinc900, RoundedCornerShape(4.dp))
+            .border(1.dp, Zinc800, RoundedCornerShape(4.dp))
+            .padding(12.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ModeTab("AUTOMATICO", state.rpmScaleMode == RpmScaleMode.AUTO) {
+                onSetMode(RpmScaleMode.AUTO)
+            }
+            ModeTab("MANUAL", state.rpmScaleMode == RpmScaleMode.MANUAL) {
+                onSetMode(RpmScaleMode.MANUAL)
+            }
+        }
+
+        if (state.rpmScaleMode == RpmScaleMode.AUTO) {
+            Text(
+                "O teto da barra é o RPM mais alto já registrado, como na FT. " +
+                    "Ele sobe sozinho quando você passa do recorde e não desce.",
+                style = NumberSmall,
+                color = Zinc400,
+            )
+            Column {
+                Text("PICO REGISTRADO", style = LabelStyle, color = Zinc400)
+                Text(
+                    if (state.learnedMaxRpm > 0) state.learnedMaxRpm.toString() else "ainda nenhum",
+                    style = NumberLarge,
+                    color = if (state.learnedMaxRpm > 0) Emerald500 else Zinc500,
+                )
+            }
+            Button(
+                onClick = onResetPeak,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Zinc950,
+                    contentColor = Zinc400,
+                ),
+                shape = RoundedCornerShape(4.dp),
+            ) {
+                Text("ZERAR PICO", style = LabelStyle)
+            }
+        } else {
+            Text(
+                "Corte é onde a barra fica vermelha. Aviso é onde ela pisca. " +
+                    "Escala é o fim da barra — deixe vazio para usar o corte.",
+                style = NumberSmall,
+                color = Zinc400,
+            )
+            NumField("CORTE", state.manualRedline, Modifier.fillMaxWidth(), placeholder = "rpm") {
+                onField(it, null, null)
+            }
+            NumField("AVISO", state.manualShift, Modifier.fillMaxWidth(), placeholder = "rpm") {
+                onField(null, it, null)
+            }
+            NumField("ESCALA", state.manualMaxRpm, Modifier.fillMaxWidth(), placeholder = "rpm") {
+                onField(null, null, it)
+            }
+            Button(
+                onClick = onApply,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Emerald500,
+                    contentColor = Zinc950,
+                ),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("SALVAR", style = LabelStyle)
+            }
         }
     }
 }
@@ -301,13 +413,15 @@ private fun RatioList(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${ratio.gear}a", style = NumberMedium, color = Zinc100, modifier = Modifier.width(36.dp))
                 NumField(
-                    label = "rpm/km/h",
+                    label = "",
                     value = "%.1f".format(ratio.rpmPerKmh),
-                    modifier = Modifier.width(120.dp),
+                    modifier = Modifier.width(90.dp),
                     decimal = true,
                 ) { text ->
                     text.toDoubleOrNull()?.takeIf { it > 0 }?.let { onEdit(ratio.gear, it) }
                 }
+                Spacer(Modifier.width(8.dp))
+                Text("rpm/km/h", style = NumberSmall, color = Zinc600, maxLines = 1)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     when (ratio.source) {
@@ -353,23 +467,54 @@ private fun LiveValue(label: String, value: String) {
     }
 }
 
+/**
+ * Campo numérico compacto.
+ *
+ * O `OutlinedTextField` do Material tem ~56 dp de altura mais o rótulo
+ * flutuante: com ele, só duas marchas cabiam na tela e eram precisos quatro
+ * arrastes para chegar no botão de salvar. Parado no acostamento isso é ruim.
+ * Este aqui gasta ~34 dp e cabe a lista inteira de uma vez.
+ */
 @Composable
 private fun NumField(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
+    placeholder: String = "",
     onChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label, style = LabelStyle) },
-        singleLine = true,
-        textStyle = NumberSmall,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
-        ),
-        modifier = modifier,
-    )
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (label.isNotEmpty()) {
+            Text(
+                label,
+                style = LabelStyle,
+                color = Zinc400,
+                maxLines = 1,
+                modifier = Modifier.width(58.dp),
+            )
+        }
+        Box(
+            Modifier
+                .weight(1f)
+                .background(Zinc950, RoundedCornerShape(3.dp))
+                .border(1.dp, Zinc800, RoundedCornerShape(3.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
+            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                Text(placeholder, style = NumberSmall, color = Zinc600)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = NumberSmall.copy(color = Zinc100),
+                cursorBrush = SolidColor(Emerald500),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 }

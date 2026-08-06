@@ -108,6 +108,12 @@ private fun AppRoot(container: AppContainer) {
                     calibViewModel.updateManualField(w, p, r, f, i, g)
                 },
                 onApplyManual = { calibViewModel.applyManual() },
+                onSetRpmMode = { calibViewModel.setRpmScaleMode(it) },
+                onRpmField = { redline, shift, max ->
+                    calibViewModel.updateRpmField(redline, shift, max)
+                },
+                onApplyRpm = { calibViewModel.applyRpmLimits() },
+                onResetPeak = { calibViewModel.resetLearnedMax() },
                 onClose = { screen = Screen.DASH },
             )
         }
