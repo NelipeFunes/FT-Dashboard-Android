@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import br.dev.ftdash.data.SpeedOrigin
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.LabelStyle
@@ -28,13 +29,15 @@ import br.dev.ftdash.ui.theme.Zinc900
 /**
  * Velocidade pelo GPS do Android — a ECU não recebe sensor de roda neste carro.
  *
- * O ponto de status ao lado do rótulo é honesto sobre a origem do dado: verde
- * com fixação, âmbar sem. Sem fixação o número vira `--`, nunca zero.
+ * A etiqueta ao lado do rótulo diz a origem do número, sem eufemismo: `GPS`
+ * verde para fixação de verdade, `SIMULADO` âmbar quando o valor é sintetizado
+ * na bancada, `SEM GPS` âmbar quando não há fixação. Um painel que chama de GPS
+ * um número inventado é pior que um painel sem velocidade.
  */
 @Composable
 fun SpeedReadout(
     kmh: Float?,
-    hasGpsFix: Boolean,
+    origin: SpeedOrigin,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -47,9 +50,13 @@ fun SpeedReadout(
             Text("VELOCIDADE", style = LabelStyle, color = Zinc400)
             Spacer(Modifier.weight(1f))
             Text(
-                if (hasGpsFix) "GPS" else "SEM GPS",
+                when (origin) {
+                    SpeedOrigin.GPS -> "GPS"
+                    SpeedOrigin.SIMULATED -> "SIMULADO"
+                    SpeedOrigin.NONE -> "SEM GPS"
+                },
                 style = NumberSmall,
-                color = if (hasGpsFix) Emerald500 else Amber500,
+                color = if (origin == SpeedOrigin.GPS) Emerald500 else Amber500,
             )
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {

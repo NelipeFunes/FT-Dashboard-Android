@@ -81,7 +81,7 @@ fun DashScreen(
                 )
                 SpeedReadout(
                     kmh = state.speedKmh,
-                    hasGpsFix = state.hasGpsFix,
+                    origin = state.speedOrigin,
                 )
             }
 
@@ -213,7 +213,7 @@ fun DashScreen(
             crcFail = state.crcFail,
             frameLen = state.frameLen,
             layoutKnown = state.layoutKnown,
-            hasGpsFix = state.hasGpsFix,
+            speedOrigin = state.speedOrigin,
             onLongPress = onToggleSource,
         )
     }

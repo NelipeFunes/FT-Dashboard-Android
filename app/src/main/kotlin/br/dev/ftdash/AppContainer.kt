@@ -13,6 +13,7 @@ import br.dev.ftdash.gearing.GearProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -48,19 +49,20 @@ class AppContainer(
     /**
      * Velocidade: GPS de verdade ou sintetizada a partir do RPM do replay.
      *
-     * Cai para a simulada também quando falta permissão de localização — assim
-     * a marcha e a tela de calibração continuam demonstráveis na bancada, em
-     * vez de a tela simplesmente não fazer nada.
+     * A simulação é **amarrada à fonte de telemetria**, não a um interruptor
+     * solto: só entra quando os próprios frames são replay. Com a ECU no cabo a
+     * velocidade é sempre a do GPS, e se não houver fixação o painel mostra
+     * `--`. Inventar velocidade dentro do carro em movimento seria pior do que
+     * não mostrar nada — e a marcha estimada em cima de um número inventado
+     * seria pior ainda.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val speedFixes: Flow<SpeedFix> = settingsStore.settings
-        .map { it.useSimulatedSpeed }
+    val speedFixes: Flow<SpeedFix> = combine(
+        settingsStore.settings.map { it.useSimulatedSpeed }.distinctUntilChanged(),
+        telemetryRepository.sourceKind,
+    ) { simulationAllowed, kind -> simulationAllowed && kind == SourceKind.REPLAY }
         .distinctUntilChanged()
         .flatMapLatest { simulated ->
-            if (simulated || !gpsSpeedSource.hasPermission()) {
-                simulatedSpeedSource.stream()
-            } else {
-                gpsSpeedSource.stream()
-            }
+            if (simulated) simulatedSpeedSource.stream() else gpsSpeedSource.stream()
         }
 }

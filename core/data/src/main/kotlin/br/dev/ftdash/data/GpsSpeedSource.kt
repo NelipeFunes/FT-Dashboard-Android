@@ -36,7 +36,7 @@ class GpsSpeedSource(private val context: Context) : SpeedSource {
     @SuppressLint("MissingPermission")
     override fun stream(): Flow<SpeedFix> = callbackFlow {
         if (!hasPermission()) {
-            trySend(SpeedFix(System.currentTimeMillis(), null, hasGpsFix = false))
+            trySend(SpeedFix(System.currentTimeMillis(), null, SpeedOrigin.NONE))
             awaitClose { }
             return@callbackFlow
         }
@@ -64,7 +64,7 @@ class GpsSpeedSource(private val context: Context) : SpeedSource {
                 // filtro exponencial: o suficiente para o mostrador não tremer,
                 // leve o bastante para não atrasar uma frenagem
                 filtered = filtered?.let { it + SMOOTHING * (raw - it) } ?: raw
-                trySend(SpeedFix(System.currentTimeMillis(), filtered, hasGpsFix = true))
+                trySend(SpeedFix(System.currentTimeMillis(), filtered, SpeedOrigin.GPS))
             }
         }
 
@@ -77,10 +77,10 @@ class GpsSpeedSource(private val context: Context) : SpeedSource {
                 Looper.getMainLooper(),
             )
         } catch (e: SecurityException) {
-            trySend(SpeedFix(System.currentTimeMillis(), null, hasGpsFix = false))
+            trySend(SpeedFix(System.currentTimeMillis(), null, SpeedOrigin.NONE))
         } catch (e: IllegalArgumentException) {
             // provedor GPS ausente no aparelho
-            trySend(SpeedFix(System.currentTimeMillis(), null, hasGpsFix = false))
+            trySend(SpeedFix(System.currentTimeMillis(), null, SpeedOrigin.NONE))
         }
 
         awaitClose { manager.removeUpdates(listener) }

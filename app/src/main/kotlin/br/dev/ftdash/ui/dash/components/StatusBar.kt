@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.SourceState
+import br.dev.ftdash.data.SpeedOrigin
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.NumberSmall
@@ -51,7 +52,7 @@ fun StatusBar(
     crcFail: Long,
     frameLen: Int,
     layoutKnown: Boolean,
-    hasGpsFix: Boolean,
+    speedOrigin: SpeedOrigin,
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -105,9 +106,13 @@ fun StatusBar(
             color = if (layoutKnown) Zinc500 else Amber500,
         )
         Text(
-            if (hasGpsFix) "gps ok" else "gps --",
+            when (speedOrigin) {
+                SpeedOrigin.GPS -> "gps ok"
+                SpeedOrigin.SIMULATED -> "vel. simulada"
+                SpeedOrigin.NONE -> "gps --"
+            },
             style = NumberSmall,
-            color = if (hasGpsFix) Zinc500 else Amber500,
+            color = if (speedOrigin == SpeedOrigin.GPS) Zinc500 else Amber500,
         )
 
         Spacer(Modifier.weight(1f))

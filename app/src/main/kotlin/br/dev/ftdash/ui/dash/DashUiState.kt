@@ -2,6 +2,7 @@ package br.dev.ftdash.ui.dash
 
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.SourceState
+import br.dev.ftdash.data.SpeedOrigin
 import br.dev.ftdash.gearing.GearState
 
 /**
@@ -33,7 +34,7 @@ data class DashUiState(
     val cutoff: Boolean = false,
 
     val speedKmh: Float? = null,
-    val hasGpsFix: Boolean = false,
+    val speedOrigin: SpeedOrigin = SpeedOrigin.NONE,
     val gear: GearState = GearState.Unknown,
     val gearCalibrated: Boolean = false,
 

@@ -128,7 +128,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
 
         _state.value = _state.value.copy(
             speedKmh = fix.kmh,
-            hasGpsFix = fix.hasGpsFix,
+            speedOrigin = fix.origin,
             gear = gear,
         )
     }
