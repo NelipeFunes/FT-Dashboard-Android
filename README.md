@@ -12,9 +12,9 @@ partir de velocidade × RPM, com calibração).
 
 | Parte | Situação |
 |---|---|
-| Parser do protocolo | pronto, coberto por teste contra 33.699 frames reais |
+| Parser do protocolo | **53 testes passando**, incluindo os 33.699 frames reais no CRC |
 | Lógica de marcha + calibração | pronta, coberta por teste |
-| Painel (UI) | pronto |
+| Painel (UI) | compila, APK gerado — **ainda não visto rodando** (sem AVD nem aparelho) |
 | Leitura por USB | **escrita, mas nunca executada contra a ECU** — ver abaixo |
 
 A fonte padrão é o **replay** de frames reais gravados do carro (`app/src/main/assets/fixtures/replay-107.txt`),
@@ -22,18 +22,33 @@ então o app funciona por inteiro sem carro e sem ECU. Toque longo na barra de s
 
 ## Como abrir
 
-Precisa de **Android Studio** (traz JDK, SDK e Gradle). Não há JDK nesta máquina, então nada aqui foi
-compilado ainda.
-
-1. Android Studio → *Open* → `C:\Users\User\ft-dash-android`
-2. Deixe sincronizar; ele gera o `local.properties` e o wrapper do Gradle
-3. *Run* no emulador ou na multimídia via ADB
+Android Studio → *Open* → a pasta do projeto. O `local.properties` não é versionado; o Studio o gera no
+primeiro sync.
 
 Rodar só os testes do protocolo (rápido, JVM puro, sem emulador):
 
 ```bash
 ./gradlew :core:protocol:test
 ```
+
+Gerar o APK de debug:
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+### Versões, e por que estas
+
+A cadeia toda é ditada pelo JDK que vem com o Android Studio, o **25**: Java 25 exige Gradle 9.1+, daí
+Gradle 9.6.1 → AGP 9.3.0 (que pede Gradle 9.5+) → compileSdk 37 (o core-ktx 1.19 e o lifecycle 2.11
+exigem 37+). `targetSdk` continua 34 de propósito — multimídia velha, app sideload.
+
+A AGP 9 compila Kotlin sozinha ("built-in Kotlin"), então os módulos Android **não** aplicam
+`org.jetbrains.kotlin.android` — aplicar junto quebra o sync, porque o plugin avulso ainda faz cast do
+bloco `android {}` para `BaseExtension`, interface que a AGP 9 não expõe mais. Só o `:core:protocol`, que
+é Kotlin/JVM puro, usa o plugin `kotlin.jvm`. O Kotlin está fixado em **2.2.10** porque é a versão de que
+o POM da AGP 9.3.0 depende — assim o Kotlin embutido, os plugins de compilador e o módulo JVM ficam no
+mesmo número.
 
 ## Estrutura
 
