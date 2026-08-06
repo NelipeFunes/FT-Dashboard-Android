@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "br.dev.ftdash.data"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26

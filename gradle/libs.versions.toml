@@ -1,13 +1,17 @@
+# Versoes escolhidas a partir do que esta instalado na maquina:
+# o JDK do Android Studio e o 25, e Java 25 exige Gradle 9.1 ou mais novo.
+# Dai em diante a cadeia se fecha sozinha: Gradle 9.6 -> AGP 9.3 -> compileSdk
+# minimo 36 e build-tools 36.0.0 (que ja esta no SDK).
 [versions]
-agp = "8.7.3"
-kotlin = "2.0.21"
-coreKtx = "1.13.1"
-lifecycle = "2.8.7"
-activityCompose = "1.9.3"
-composeBom = "2024.12.01"
-coroutines = "1.9.0"
-datastore = "1.1.1"
-serialization = "1.7.3"
+agp = "9.3.0"
+kotlin = "2.2.20"
+coreKtx = "1.19.0"
+lifecycle = "2.11.0"
+activityCompose = "1.13.0"
+composeBom = "2026.06.01"
+coroutines = "1.10.2"
+datastore = "1.2.1"
+serialization = "1.8.1"
 junit = "4.13.2"
 
 [libraries]

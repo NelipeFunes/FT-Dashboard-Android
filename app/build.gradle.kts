@@ -6,14 +6,16 @@ plugins {
 
 android {
     namespace = "br.dev.ftdash"
-    compileSdk = 35
+    // 36 é o mínimo que a AGP 9 aceita.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.dev.ftdash"
         minSdk = 26
-        // 34 de propósito: multimídia de carro roda Android 9-11 e o app é
-        // sideload, não Play Store — targetSdk 35 só traria restrições novas
-        // sem nenhum ganho aqui.
+        // Explícito de propósito: a AGP 9 passou a herdar o targetSdk do
+        // compileSdk quando não declarado. 34 porque multimídia de carro roda
+        // Android 9-11 e o app é sideload, não Play Store — subir o targetSdk
+        // só traria restrições novas sem nenhum ganho aqui.
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
