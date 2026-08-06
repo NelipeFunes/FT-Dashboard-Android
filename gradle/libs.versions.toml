@@ -3,8 +3,10 @@
 # Dai em diante a cadeia se fecha sozinha: Gradle 9.6 -> AGP 9.3 -> compileSdk
 # minimo 36 e build-tools 36.0.0 (que ja esta no SDK).
 [versions]
-agp = "9.3.0"
-# Casado de proposito com o Kotlin que a AGP 9.3.0 embute (o POM dela depende
+# 9.3.1 e a ultima ESTAVEL. O Studio oferece 9.4.0, mas so existe em alpha --
+# nao vale trocar a base do build por um alpha sem nada a ganhar aqui.
+agp = "9.3.1"
+# Casado de proposito com o Kotlin que a AGP 9.3.1 embute (o POM dela depende
 # de kotlin-gradle-plugin 2.2.10). Com o Kotlin embutido da AGP ligado, os
 # modulos Android compilam nessa versao; fixar o mesmo numero aqui mantem o
 # :core:protocol (Kotlin/JVM puro) e os plugins de compilador no mesmo compasso.
