@@ -6,6 +6,7 @@ import br.dev.ftdash.AppContainer
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.UsbBusReport
 import br.dev.ftdash.data.settings.RpmScaleMode
+import br.dev.ftdash.trip.FuelSetup
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.GearRatio
 import br.dev.ftdash.gearing.RatioSource
@@ -17,7 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class CalibMode { LEARN, MANUAL, RPM, USB }
+enum class CalibMode { LEARN, MANUAL, RPM, FUEL, USB }
 
 data class CalibUiState(
     val mode: CalibMode = CalibMode.LEARN,
@@ -45,6 +46,13 @@ data class CalibUiState(
     val manualRedline: String = "",
     val manualShift: String = "",
     val manualMaxRpm: String = "",
+
+    // --- aba de combustível ---
+    val tankLiters: String = "",
+    val injectorFlow: String = "",
+    val injectorCount: String = "",
+    val fuelUsedLiters: Double = 0.0,
+    val fuelRemainingLiters: Double? = null,
 
     // --- aba de USB ---
     val usbReport: UsbBusReport? = null,
@@ -81,6 +89,18 @@ class GearCalibViewModel(
                         .takeIf { it.isNotEmpty() }
                         ?.map { it.toString() }
                         ?: _state.value.gearboxRatios,
+                    tankLiters = s.fuelSetup.tankLiters.takeIf { it > 0 }?.let { "%.0f".format(it) }
+                        ?: _state.value.tankLiters,
+                    injectorFlow = s.fuelSetup.injectorFlowCcMin.takeIf { it > 0 }
+                        ?.let { "%.0f".format(it) } ?: _state.value.injectorFlow,
+                    injectorCount = s.fuelSetup.injectorCount.takeIf { it > 0 }?.toString()
+                        ?: _state.value.injectorCount,
+                    fuelUsedLiters = s.trip.fuelUsedLiters,
+                    fuelRemainingLiters = if (s.fuelSetup.isComplete) {
+                        (s.fuelSetup.tankLiters - s.trip.fuelUsedLiters).coerceAtLeast(0.0)
+                    } else {
+                        null
+                    },
                     rpmScaleMode = s.rpmScaleMode,
                     learnedMaxRpm = s.learnedMaxRpm,
                     manualRedline = s.redlineRpm.takeIf { it > 0 }?.toString()
@@ -110,6 +130,37 @@ class GearCalibViewModel(
     fun setMode(mode: CalibMode) {
         _state.value = _state.value.copy(mode = mode, message = null)
         if (mode == CalibMode.USB) scanUsb()
+    }
+
+    fun updateFuelField(tank: String? = null, flow: String? = null, count: String? = null) {
+        val s = _state.value
+        _state.value = s.copy(
+            tankLiters = tank ?: s.tankLiters,
+            injectorFlow = flow ?: s.injectorFlow,
+            injectorCount = count ?: s.injectorCount,
+            message = null,
+        )
+    }
+
+    fun applyFuelSetup() = viewModelScope.launch {
+        val s = _state.value
+        val setup = FuelSetup(
+            tankLiters = s.tankLiters.replace(',', '.').toDoubleOrNull() ?: 0.0,
+            injectorFlowCcMin = s.injectorFlow.replace(',', '.').toDoubleOrNull() ?: 0.0,
+            injectorCount = s.injectorCount.toIntOrNull() ?: 0,
+        )
+        if (!setup.isComplete) {
+            _state.value = s.copy(
+                message = "Preencha tanque, vazão do bico e quantidade de bicos.",
+            )
+            return@launch
+        }
+        container.settingsStore.saveFuelSetup(setup)
+        _state.value = _state.value.copy(
+            message = "Tanque de %.0f L, %d bicos de %.0f cc/min.".format(
+                setup.tankLiters, setup.injectorCount, setup.injectorFlowCcMin,
+            ),
+        )
     }
 
     /** Varre o barramento e mostra o que a multimídia enxerga. */

@@ -67,6 +67,9 @@ fun GearCalibScreen(
     onRpmField: (String?, String?, String?) -> Unit,
     onApplyRpm: () -> Unit,
     onResetPeak: () -> Unit,
+    onFuelField: (String?, String?, String?) -> Unit,
+    onApplyFuel: () -> Unit,
+    onFillTank: () -> Unit,
     onRescanUsb: () -> Unit,
     onUseUsb: () -> Unit,
     onUseReplay: () -> Unit,
@@ -89,6 +92,8 @@ fun GearCalibScreen(
             Spacer(Modifier.width(6.dp))
             ModeTab("RPM", state.mode == CalibMode.RPM) { onSetMode(CalibMode.RPM) }
             Spacer(Modifier.width(6.dp))
+            ModeTab("TANQUE", state.mode == CalibMode.FUEL) { onSetMode(CalibMode.FUEL) }
+            Spacer(Modifier.width(6.dp))
             ModeTab("USB", state.mode == CalibMode.USB) { onSetMode(CalibMode.USB) }
             Spacer(Modifier.width(12.dp))
             TextButton(onClick = onClose) { Text("FECHAR", style = LabelStyle, color = Zinc400) }
@@ -103,6 +108,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
+                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank)
                     CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
@@ -390,6 +396,91 @@ private fun RpmModePanel(
             ) {
                 Text("SALVAR", style = LabelStyle)
             }
+        }
+    }
+}
+
+/**
+ * Tanque e bicos.
+ *
+ * O nível do tanque não vem de boia nenhuma — a ECU não manda isso. Ele é
+ * calculado: tanque cheio menos o que passou pelos bicos desde o último "enchi
+ * o tanque". Para isso o app precisa de três números que só o dono do carro
+ * sabe: capacidade do tanque, vazão nominal de cada bico e quantos são.
+ *
+ * A conta usa a vazão nominal, e a real varia com a pressão de combustível.
+ * Erra para menos em pressão alta e para mais em pressão baixa — bom o
+ * suficiente para saber que está na reserva, não para chegar no lacrado.
+ */
+@Composable
+private fun FuelModePanel(
+    state: CalibUiState,
+    onField: (String?, String?, String?) -> Unit,
+    onApply: () -> Unit,
+    onFillTank: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Zinc900, RoundedCornerShape(4.dp))
+            .border(1.dp, Zinc800, RoundedCornerShape(4.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "O nível sai do consumo dos bicos, não de boia. Preencha os três " +
+                "campos e aperte ENCHI O TANQUE ao abastecer.",
+            style = NumberSmall,
+            color = Zinc400,
+        )
+
+        NumField("TANQUE", state.tankLiters, Modifier.fillMaxWidth(), placeholder = "litros") {
+            onField(it, null, null)
+        }
+        NumField("BICO", state.injectorFlow, Modifier.fillMaxWidth(), placeholder = "cc/min de UM bico") {
+            onField(null, it, null)
+        }
+        NumField("QUANTOS", state.injectorCount, Modifier.fillMaxWidth(), placeholder = "n. de bicos") {
+            onField(null, null, it)
+        }
+
+        Button(
+            onClick = onApply,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Emerald500,
+                contentColor = Zinc950,
+            ),
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("SALVAR", style = LabelStyle)
+        }
+
+        Column(Modifier.padding(top = 6.dp)) {
+            Text("NO TANQUE AGORA", style = LabelStyle, color = Zinc400)
+            Text(
+                state.fuelRemainingLiters?.let { "%.1f L".format(it) } ?: "falta configurar",
+                style = NumberLarge,
+                color = if (state.fuelRemainingLiters != null) Emerald500 else Zinc500,
+            )
+            Text(
+                "consumidos %.2f L".format(state.fuelUsedLiters),
+                style = NumberSmall,
+                color = Zinc500,
+            )
+        }
+
+        Button(
+            onClick = onFillTank,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Zinc950,
+                contentColor = Zinc400,
+            ),
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("ENCHI O TANQUE", style = LabelStyle)
         }
     }
 }

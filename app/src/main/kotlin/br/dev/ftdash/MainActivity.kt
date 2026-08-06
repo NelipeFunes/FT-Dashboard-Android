@@ -84,6 +84,8 @@ private fun AppRoot(container: AppContainer) {
             state = dashState,
             onOpenCalibration = { screen = Screen.CALIBRATION },
             onToggleSource = { dashViewModel.selectSource(nextSource(dashState.sourceKind)) },
+            onResetTrip = { dashViewModel.resetTrip() },
+            onFillTank = { dashViewModel.fillTank() },
         )
 
         Screen.CALIBRATION -> {
@@ -114,6 +116,11 @@ private fun AppRoot(container: AppContainer) {
                 },
                 onApplyRpm = { calibViewModel.applyRpmLimits() },
                 onResetPeak = { calibViewModel.resetLearnedMax() },
+                onFuelField = { tank, flow, count ->
+                    calibViewModel.updateFuelField(tank, flow, count)
+                },
+                onApplyFuel = { calibViewModel.applyFuelSetup() },
+                onFillTank = { dashViewModel.fillTank() },
                 onRescanUsb = { calibViewModel.scanUsb() },
                 onUseUsb = { calibViewModel.useUsbSource() },
                 onUseReplay = { calibViewModel.useReplaySource() },
