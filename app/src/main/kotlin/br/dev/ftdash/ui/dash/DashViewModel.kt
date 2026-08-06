@@ -49,6 +49,19 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
 
     private var sourceRestored = false
 
+    /**
+     * As preferências já chegaram do disco?
+     *
+     * A leitura do DataStore e a chegada dos frames são as duas assíncronas e
+     * correm em paralelo. Se um frame vencer, [learnMaxRpm] promoveria um pico
+     * partindo de zero e gravaria por cima do pico real — que, por ser um valor
+     * que nunca recua sozinho, estaria perdido para sempre. Na bancada o
+     * DataStore sempre ganhou, mas "sempre ganhou" não é garantia: numa central
+     * lenta, ou com o USB entregando frames logo após o handshake, a ordem pode
+     * inverter. Enquanto isto for falso, o aprendizado fica parado.
+     */
+    private var settingsLoaded = false
+
     private fun observeSettings() = viewModelScope.launch {
         container.settingsStore.settings.collect { s ->
             // A fonte escolhida era gravada e nunca lida de volta: o app abria
@@ -60,6 +73,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             }
             estimator.profile = s.gearProfile
             learnedMaxRpm = s.learnedMaxRpm
+            settingsLoaded = true
             container.simulatedSpeedSource.profile = s.gearProfile
             container.replaySource.speedMultiplier = s.replaySpeed
             _state.value = _state.value.copy(
@@ -154,6 +168,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
      * por um quinto de segundo, um motor subindo de giro sustenta.
      */
     private fun learnMaxRpm(rpm: Int) {
+        if (!settingsLoaded) return
         if (rpm <= learnedMaxRpm) {
             maxCandidateFrames = 0
             return
