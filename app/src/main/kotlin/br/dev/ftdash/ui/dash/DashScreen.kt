@@ -111,8 +111,11 @@ fun DashScreen(
                     ValueTile(
                         label = "LAMBDA",
                         // Sonda em erro (bruto 9990) vira "--", nunca um número
-                        // que pareça leitura boa.
-                        value = state.lambda?.let { "%.2f".format(it) },
+                        // que pareça leitura boa. O fmt também é necessário
+                        // aqui: sem ele o λ é o único mostrador que não zera
+                        // quando a telemetria cai, e fica um valor velho no
+                        // meio de uma tela de traços.
+                        value = state.fmt { state.lambda?.let { "%.2f".format(it) } },
                         unit = "",
                         valueColor = lambdaColor(state.lambda, state.lambdaTarget),
                         secondary = if (state.lambdaTarget > 0f) {
@@ -219,8 +222,8 @@ fun DashScreen(
     }
 }
 
-/** Antes do primeiro frame, tudo é "--". */
-private inline fun DashUiState.fmt(format: () -> String): String? =
+/** Antes do primeiro frame — e depois que a telemetria cai — tudo é "--". */
+private inline fun DashUiState.fmt(format: () -> String?): String? =
     if (hasData) format() else null
 
 private fun DashUiState.orNull(v: Float): Float? = if (hasData) v else null

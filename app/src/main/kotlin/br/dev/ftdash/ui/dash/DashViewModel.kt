@@ -47,12 +47,21 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         observeSpeed()
     }
 
+    private var sourceRestored = false
+
     private fun observeSettings() = viewModelScope.launch {
         container.settingsStore.settings.collect { s ->
+            // A fonte escolhida era gravada e nunca lida de volta: o app abria
+            // sempre no replay, mesmo com a ECU no cabo. Restaura uma vez, na
+            // primeira leitura das preferências.
+            if (!sourceRestored) {
+                sourceRestored = true
+                container.telemetryRepository.selectSource(s.sourceKind)
+            }
             estimator.profile = s.gearProfile
+            learnedMaxRpm = s.learnedMaxRpm
             container.simulatedSpeedSource.profile = s.gearProfile
             container.replaySource.speedMultiplier = s.replaySpeed
-            learnedMaxRpm = s.learnedMaxRpm
             _state.value = _state.value.copy(
                 redlineRpm = s.effectiveRedlineRpm,
                 shiftRpm = s.effectiveShiftRpm,
@@ -104,11 +113,23 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                 }
 
                 is TelemetryEvent.Status -> {
+                    // Toda tentativa de conexão zera os contadores: senão, ao
+                    // trocar de fonte, a barra de status mostra a taxa e a
+                    // contagem de frames da fonte anterior — dizendo "USB
+                    // 15,8 Hz, 1293 frames" para um USB que nem conectou.
+                    val restarting = event.state == SourceState.CONNECTING
+                    val lost = event.state == SourceState.ERROR ||
+                        event.state == SourceState.STALLED ||
+                        restarting
                     _state.value = _state.value.copy(
                         sourceState = event.state,
                         sourceDetail = event.detail,
                         sourceKind = container.telemetryRepository.sourceKind.value,
-                        hasData = if (event.state == SourceState.ERROR) false else _state.value.hasData,
+                        hasData = if (lost) false else _state.value.hasData,
+                        hz = if (restarting) 0f else _state.value.hz,
+                        framesOk = if (restarting) 0 else _state.value.framesOk,
+                        crcFail = if (restarting) 0 else _state.value.crcFail,
+                        frameLen = if (restarting) 0 else _state.value.frameLen,
                     )
                 }
 
