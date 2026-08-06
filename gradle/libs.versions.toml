@@ -4,7 +4,11 @@
 # minimo 36 e build-tools 36.0.0 (que ja esta no SDK).
 [versions]
 agp = "9.3.0"
-kotlin = "2.2.20"
+# Casado de proposito com o Kotlin que a AGP 9.3.0 embute (o POM dela depende
+# de kotlin-gradle-plugin 2.2.10). Com o Kotlin embutido da AGP ligado, os
+# modulos Android compilam nessa versao; fixar o mesmo numero aqui mantem o
+# :core:protocol (Kotlin/JVM puro) e os plugins de compilador no mesmo compasso.
+kotlin = "2.2.10"
 coreKtx = "1.19.0"
 lifecycle = "2.11.0"
 activityCompose = "1.13.0"
@@ -40,7 +44,9 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# org.jetbrains.kotlin.android saiu daqui: a AGP 9 aplica o Kotlin sozinho nos
+# modulos Android, e o plugin avulso ainda faz cast para BaseExtension, que a
+# AGP 9 nao expoe mais -- aplicar os dois juntos quebra o sync.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

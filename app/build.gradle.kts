@@ -1,13 +1,14 @@
-plugins {
+﻿plugins {
+    // Sem plugin de Kotlin: a AGP 9 compila Kotlin sozinha. O plugin de
+    // compilador do Compose continua sendo aplicado normalmente.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "br.dev.ftdash"
     // 36 é o mínimo que a AGP 9 aceita.
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "br.dev.ftdash"
@@ -45,11 +46,8 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
+// O jvmTarget do Kotlin vem de compileOptions.targetCompatibility acima —
+// com o Kotlin embutido da AGP não é preciso declarar de novo.
 
 dependencies {
     implementation(project(":core:protocol"))
