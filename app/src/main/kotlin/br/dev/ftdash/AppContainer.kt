@@ -7,6 +7,8 @@ import br.dev.ftdash.data.SimulatedSpeedSource
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.SpeedFix
 import br.dev.ftdash.data.TelemetryRepository
+import br.dev.ftdash.data.UsbBusReport
+import br.dev.ftdash.data.UsbDiagnostics
 import br.dev.ftdash.data.UsbTelemetrySource
 import br.dev.ftdash.data.settings.SettingsStore
 import br.dev.ftdash.gearing.GearProfile
@@ -32,8 +34,12 @@ class AppContainer(
 
     val replaySource = ReplayTelemetrySource(appContext)
 
-    /** Fase 2: desligado até ser validado contra a ECU numa multimídia real. */
-    val usbSource = UsbTelemetrySource(appContext, enabled = false)
+    /**
+     * Ligada, mas **não é a fonte padrão** — ainda não foi validada contra a ECU
+     * numa multimídia. Entra por toque longo na barra de status ou pela aba USB
+     * da configuração.
+     */
+    val usbSource = UsbTelemetrySource(appContext)
 
     val telemetryRepository = TelemetryRepository(
         scope = scope,
@@ -42,6 +48,9 @@ class AppContainer(
             SourceKind.USB to usbSource,
         ),
     )
+
+    /** Foto do barramento USB agora — a aba de diagnóstico chama a cada abertura. */
+    fun scanUsb(): UsbBusReport = UsbDiagnostics.scan(appContext)
 
     val gpsSpeedSource = GpsSpeedSource(appContext)
     val simulatedSpeedSource = SimulatedSpeedSource(GearProfile())

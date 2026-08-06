@@ -114,6 +114,9 @@ private fun AppRoot(container: AppContainer) {
                 },
                 onApplyRpm = { calibViewModel.applyRpmLimits() },
                 onResetPeak = { calibViewModel.resetLearnedMax() },
+                onRescanUsb = { calibViewModel.scanUsb() },
+                onUseUsb = { calibViewModel.useUsbSource() },
+                onUseReplay = { calibViewModel.useReplaySource() },
                 onClose = { screen = Screen.DASH },
             )
         }

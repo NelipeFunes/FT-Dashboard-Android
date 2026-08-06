@@ -3,6 +3,8 @@ package br.dev.ftdash.ui.calib
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.dev.ftdash.AppContainer
+import br.dev.ftdash.data.SourceKind
+import br.dev.ftdash.data.UsbBusReport
 import br.dev.ftdash.data.settings.RpmScaleMode
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.GearRatio
@@ -15,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class CalibMode { LEARN, MANUAL, RPM }
+enum class CalibMode { LEARN, MANUAL, RPM, USB }
 
 data class CalibUiState(
     val mode: CalibMode = CalibMode.LEARN,
@@ -43,6 +45,9 @@ data class CalibUiState(
     val manualRedline: String = "",
     val manualShift: String = "",
     val manualMaxRpm: String = "",
+
+    // --- aba de USB ---
+    val usbReport: UsbBusReport? = null,
 
     val message: String? = null,
 )
@@ -104,6 +109,25 @@ class GearCalibViewModel(
 
     fun setMode(mode: CalibMode) {
         _state.value = _state.value.copy(mode = mode, message = null)
+        if (mode == CalibMode.USB) scanUsb()
+    }
+
+    /** Varre o barramento e mostra o que a multimídia enxerga. */
+    fun scanUsb() {
+        _state.value = _state.value.copy(usbReport = container.scanUsb())
+    }
+
+    /** Troca a fonte de telemetria para o USB e volta para o painel. */
+    fun useUsbSource() = viewModelScope.launch {
+        container.telemetryRepository.selectSource(SourceKind.USB)
+        container.settingsStore.saveSourceKind(SourceKind.USB)
+        _state.value = _state.value.copy(message = "Fonte trocada para USB.")
+    }
+
+    fun useReplaySource() = viewModelScope.launch {
+        container.telemetryRepository.selectSource(SourceKind.REPLAY)
+        container.settingsStore.saveSourceKind(SourceKind.REPLAY)
+        _state.value = _state.value.copy(message = "Fonte trocada para replay.")
     }
 
     fun selectGear(gear: Int) {

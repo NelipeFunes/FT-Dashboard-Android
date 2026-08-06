@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import br.dev.ftdash.data.UsbBusReport
 import br.dev.ftdash.data.settings.RpmScaleMode
 import br.dev.ftdash.ui.theme.Zinc600
 import br.dev.ftdash.gearing.GearProfile
@@ -66,6 +67,9 @@ fun GearCalibScreen(
     onRpmField: (String?, String?, String?) -> Unit,
     onApplyRpm: () -> Unit,
     onResetPeak: () -> Unit,
+    onRescanUsb: () -> Unit,
+    onUseUsb: () -> Unit,
+    onUseReplay: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -84,6 +88,8 @@ fun GearCalibScreen(
             ModeTab("RELACOES", state.mode == CalibMode.MANUAL) { onSetMode(CalibMode.MANUAL) }
             Spacer(Modifier.width(6.dp))
             ModeTab("RPM", state.mode == CalibMode.RPM) { onSetMode(CalibMode.RPM) }
+            Spacer(Modifier.width(6.dp))
+            ModeTab("USB", state.mode == CalibMode.USB) { onSetMode(CalibMode.USB) }
             Spacer(Modifier.width(12.dp))
             TextButton(onClick = onClose) { Text("FECHAR", style = LabelStyle, color = Zinc400) }
         }
@@ -97,6 +103,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
+                    CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
             Box(Modifier.weight(0.45f)) {
@@ -385,6 +392,104 @@ private fun RpmModePanel(
             }
         }
     }
+}
+
+/**
+ * O que a multimídia enxerga no barramento USB.
+ *
+ * A maior incógnita do projeto é se a porta USB da central faz host de verdade
+ * ou só monta pendrive. Sem esta tela, uma tentativa que falha no carro volta
+ * como "não funcionou". Com ela, volta sabendo qual dos casos é: barramento
+ * vazio (sem solução por software), FT com outro VID/PID, ou só falta de
+ * permissão.
+ */
+@Composable
+private fun UsbModePanel(
+    report: UsbBusReport?,
+    onRescan: () -> Unit,
+    onUseUsb: () -> Unit,
+    onUseReplay: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Zinc900, RoundedCornerShape(4.dp))
+            .border(1.dp, Zinc800, RoundedCornerShape(4.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ModeTab("RELER", false, onRescan)
+            ModeTab("USAR USB", false, onUseUsb)
+            ModeTab("USAR REPLAY", false, onUseReplay)
+        }
+
+        if (report == null) {
+            Text("Lendo o barramento...", style = NumberSmall, color = Zinc500)
+            return@Column
+        }
+
+        Text(report.summary, style = NumberMedium, color = statusColor(report))
+
+        if (!report.hostFeatureDeclared) {
+            Text(
+                "O aparelho não declara USB host. Nesse caso não há software " +
+                    "que resolva — a porta só serve para pendrive.",
+                style = NumberSmall,
+                color = Amber500,
+            )
+        }
+
+        Text("VID:PID esperado da FT450: 1c5e:1002", style = NumberSmall, color = Zinc500)
+
+        if (report.devices.isEmpty()) {
+            Text(
+                "Nenhum device no barramento. Com a FT plugada e ligada, isso " +
+                    "aponta para a porta não fazer host — ou para um cabo OTG " +
+                    "que só carrega.",
+                style = NumberSmall,
+                color = Zinc400,
+            )
+        }
+
+        for (device in report.devices) {
+            Column(Modifier.padding(top = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.idHex,
+                        style = NumberSmall,
+                        color = if (device.isFt450) Emerald500 else Zinc100,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(device.label, style = NumberSmall, color = Zinc400, maxLines = 1)
+                    if (device.isFt450) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (device.hasPermission) "COM PERMISSAO" else "SEM PERMISSAO",
+                            style = LabelStyle,
+                            color = if (device.hasPermission) Emerald500 else Amber500,
+                        )
+                    }
+                }
+                for (iface in device.interfaces) {
+                    Text(
+                        "  iface ${iface.id} classe ${iface.interfaceClass} · " +
+                            iface.endpoints.joinToString(" "),
+                        style = NumberSmall,
+                        color = Zinc600,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun statusColor(report: UsbBusReport) = when {
+    report.ft450?.hasPermission == true -> Emerald500
+    report.ft450 != null -> Amber500
+    else -> Amber500
 }
 
 /** Lista final — a mesma para os dois modos, com a origem de cada razão à vista. */

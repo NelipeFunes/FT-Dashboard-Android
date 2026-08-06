@@ -20,10 +20,11 @@ import kotlinx.coroutines.flow.flowOn
 /**
  * Leitura da FT450 pelo USB host do Android.
  *
- * ⚠ **Fase 2, ainda não validada no carro.** O protocolo aqui é o mesmo que já
- * roda contra a ECU real no app Electron (e cujo CRC e handshake estão cobertos
- * por teste), mas a camada `UsbManager` nunca foi exercitada contra a FT450 numa
- * multimídia. Enquanto isso não acontecer, a fonte padrão do app é o replay.
+ * ⚠ **Ainda não validada no carro.** O protocolo aqui é o mesmo que já roda
+ * contra a ECU real no app Electron (e cujo CRC e handshake estão cobertos por
+ * teste), mas a camada `UsbManager` nunca foi exercitada contra a FT450 numa
+ * multimídia. A fonte padrão do app continua sendo o replay; esta entra por
+ * toque longo na barra de status ou pela aba USB da configuração.
  *
  * Coisas que provavelmente vão dar trabalho quando for a hora, em ordem de
  * probabilidade:
@@ -43,8 +44,6 @@ import kotlinx.coroutines.flow.flowOn
  */
 class UsbTelemetrySource(
     private val context: Context,
-    /** Enquanto false, a fonte só informa que está desativada. */
-    private val enabled: Boolean = false,
     /** Fallback para o caso do ZLP — ver ponto 2 do KDoc. */
     private val sendConfigAsSingleTransfer: Boolean = false,
 ) : TelemetrySource {
@@ -52,11 +51,6 @@ class UsbTelemetrySource(
     override val kind = SourceKind.USB
 
     override fun stream(): Flow<TelemetryEvent> = flow {
-        if (!enabled) {
-            emit(TelemetryEvent.Status(SourceState.IDLE, "USB desativado (fase 1: use o replay)"))
-            return@flow
-        }
-
         val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
         while (true) {
@@ -64,14 +58,20 @@ class UsbTelemetrySource(
 
             val device = findDevice(manager)
             if (device == null) {
-                emit(TelemetryEvent.Status(SourceState.ERROR, "FT450 não encontrada no barramento"))
+                // Reporta o que o barramento mostra, não só "não achei": é a
+                // diferença entre voltar do carro sabendo que a porta não faz
+                // host e voltar sem informação nenhuma.
+                emit(TelemetryEvent.Status(SourceState.ERROR, UsbDiagnostics.scan(context).summary))
                 delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
                 continue
             }
             if (!manager.hasPermission(device)) {
-                emit(TelemetryEvent.Status(SourceState.ERROR, "sem permissão de USB para a FT450"))
-                delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
-                continue
+                emit(TelemetryEvent.Status(SourceState.CONNECTING, "pedindo permissão de USB"))
+                if (!UsbPermission.request(context, device)) {
+                    emit(TelemetryEvent.Status(SourceState.ERROR, "permissão de USB negada"))
+                    delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+                    continue
+                }
             }
 
             val connection = manager.openDevice(device)
