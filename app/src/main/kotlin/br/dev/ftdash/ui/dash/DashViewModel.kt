@@ -34,6 +34,13 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
 
     private var peakRpmAtMs = 0L
 
+    /** Espelho do pico persistido, para não reescrever o DataStore à toa. */
+    private var learnedMaxRpm = 0
+
+    /** Candidato a novo pico e há quantos frames ele se sustenta. */
+    private var maxCandidateRpm = 0
+    private var maxCandidateFrames = 0
+
     init {
         observeSettings()
         observeTelemetry()
@@ -45,10 +52,11 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             estimator.profile = s.gearProfile
             container.simulatedSpeedSource.profile = s.gearProfile
             container.replaySource.speedMultiplier = s.replaySpeed
+            learnedMaxRpm = s.learnedMaxRpm
             _state.value = _state.value.copy(
-                redlineRpm = s.redlineRpm,
-                shiftRpm = s.shiftRpm,
-                maxRpm = s.maxRpm,
+                redlineRpm = s.effectiveRedlineRpm,
+                shiftRpm = s.effectiveShiftRpm,
+                maxRpm = s.effectiveMaxRpm,
                 gearCalibrated = s.gearProfile.isCalibrated,
             )
         }
@@ -61,6 +69,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                     val t = event.telemetry
                     estimator.onRpm(t.tsMs, t.rpm)
                     container.simulatedSpeedSource.onRpm(t.rpm)
+                    learnMaxRpm(t.rpm)
 
                     val prev = _state.value
                     val peak = if (t.rpm >= prev.peakRpm || t.tsMs - peakRpmAtMs > PEAK_HOLD_MS) {
@@ -114,6 +123,35 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * Aprende o RPM mais alto já registrado, que no modo automático é o teto da
+     * barra — e, uma vez gravado, não recua.
+     *
+     * Justamente por não recuar, um pico falso estragaria a escala para sempre.
+     * Por isso o candidato só é promovido depois de [MAX_CONFIRM_FRAMES] frames
+     * seguidos acima do teto atual: ruído elétrico não sustenta rotação alta
+     * por um quinto de segundo, um motor subindo de giro sustenta.
+     */
+    private fun learnMaxRpm(rpm: Int) {
+        if (rpm <= learnedMaxRpm) {
+            maxCandidateFrames = 0
+            return
+        }
+        if (rpm >= maxCandidateRpm) {
+            maxCandidateRpm = rpm
+            maxCandidateFrames++
+        } else {
+            // ainda acima do teto, mas caindo: vale o menor da sequência
+            maxCandidateRpm = rpm
+            maxCandidateFrames++
+        }
+        if (maxCandidateFrames >= MAX_CONFIRM_FRAMES) {
+            learnedMaxRpm = maxCandidateRpm
+            maxCandidateFrames = 0
+            viewModelScope.launch { container.settingsStore.saveLearnedMaxRpm(learnedMaxRpm) }
+        }
+    }
+
     private fun observeSpeed() = viewModelScope.launch {
         container.speedFixes.collect { fix -> onSpeedFix(fix) }
     }
@@ -150,5 +188,8 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
     companion object {
         /** Quanto tempo o marcador de pico segura antes de voltar ao valor atual. */
         const val PEAK_HOLD_MS = 1_200L
+
+        /** ~0,2 s a 17 Hz: tempo demais para ruído, tempo de menos para o motor. */
+        const val MAX_CONFIRM_FRAMES = 3
     }
 }
