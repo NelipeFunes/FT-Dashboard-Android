@@ -11,6 +11,8 @@ import br.dev.ftdash.gearing.GearEstimator
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.GearState
 import br.dev.ftdash.gearing.RatioCapture
+import br.dev.ftdash.trip.FuelSetup
+import br.dev.ftdash.trip.TripComputer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +64,11 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
      */
     private var settingsLoaded = false
 
+    /** Odômetro e combustível. Restaurado do disco na primeira leitura. */
+    private val trip = TripComputer()
+    private var fuelSetup = FuelSetup()
+    private var lastTripSaveMs = 0L
+
     private fun observeSettings() = viewModelScope.launch {
         container.settingsStore.settings.collect { s ->
             // A fonte escolhida era gravada e nunca lida de volta: o app abria
@@ -70,7 +77,12 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             if (!sourceRestored) {
                 sourceRestored = true
                 container.telemetryRepository.selectSource(s.sourceKind)
+                // Só na primeira leitura: depois disso quem manda no odômetro é
+                // o TripComputer, e reaplicar o valor do disco desfaria o que
+                // ele acumulou desde a última gravação.
+                trip.restore(s.trip)
             }
+            fuelSetup = s.fuelSetup
             estimator.profile = s.gearProfile
             learnedMaxRpm = s.learnedMaxRpm
             settingsLoaded = true
@@ -81,6 +93,11 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                 shiftRpm = s.effectiveShiftRpm,
                 maxRpm = s.effectiveMaxRpm,
                 gearCalibrated = s.gearProfile.isCalibrated,
+                tankLiters = s.fuelSetup.tankLiters,
+                totalKm = trip.totalKm,
+                tripKm = trip.tripKm,
+                fuelRemainingLiters = trip.remainingLiters(s.fuelSetup),
+                fuelRemainingFraction = trip.remainingFraction(s.fuelSetup),
             )
         }
     }
@@ -93,6 +110,10 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                     estimator.onRpm(t.tsMs, t.rpm)
                     container.simulatedSpeedSource.onRpm(t.rpm)
                     learnMaxRpm(t.rpm)
+                    if (settingsLoaded) {
+                        trip.onInjection(t.tsMs, t.injDutyPct, fuelSetup)
+                        persistTripIfDue(t.tsMs)
+                    }
 
                     val prev = _state.value
                     val peak = if (t.rpm >= prev.peakRpm || t.tsMs - peakRpmAtMs > PEAK_HOLD_MS) {
@@ -123,6 +144,10 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                         frameLen = t.frameLen,
                         layoutKnown = t.layoutKnown,
                         hasData = true,
+                        totalKm = trip.totalKm,
+                        tripKm = trip.tripKm,
+                        fuelRemainingLiters = trip.remainingLiters(fuelSetup),
+                        fuelRemainingFraction = trip.remainingFraction(fuelSetup),
                     )
                 }
 
@@ -192,8 +217,35 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         container.speedFixes.collect { fix -> onSpeedFix(fix) }
     }
 
+    /**
+     * Grava o odômetro de tempos em tempos, não a cada frame.
+     *
+     * A telemetria chega a 17 Hz; gravar nessa taxa castigaria a memória da
+     * central sem ganho nenhum. A cada [TRIP_SAVE_INTERVAL_MS] o pior caso de
+     * perda é o trecho andado nesse intervalo — a 100 km/h, 830 metros.
+     */
+    private fun persistTripIfDue(nowMs: Long) {
+        if (nowMs - lastTripSaveMs < TRIP_SAVE_INTERVAL_MS) return
+        lastTripSaveMs = nowMs
+        val snapshot = trip.state
+        viewModelScope.launch { container.settingsStore.saveTrip(snapshot) }
+    }
+
+    /** Botão "enchi o tanque". */
+    fun fillTank() = viewModelScope.launch {
+        trip.fillTank()
+        container.settingsStore.saveTrip(trip.state)
+    }
+
+    /** Zera o parcial, sem tocar no total. */
+    fun resetTrip() = viewModelScope.launch {
+        trip.resetTrip()
+        container.settingsStore.saveTrip(trip.state)
+    }
+
     private fun onSpeedFix(fix: SpeedFix) {
         val gear = estimator.onSpeed(fix.tsMs, fix.kmh)
+        if (settingsLoaded) trip.onSpeedFix(fix.tsMs, fix.kmh)
 
         // A janela de captura da calibração roda em paralelo, sempre: quando o
         // usuário abre a tela de calibração, ela já tem 2 s de histórico.
@@ -204,6 +256,8 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             speedKmh = fix.kmh,
             speedOrigin = fix.origin,
             gear = gear,
+            totalKm = trip.totalKm,
+            tripKm = trip.tripKm,
         )
     }
 
@@ -227,5 +281,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
 
         /** ~0,2 s a 17 Hz: tempo demais para ruído, tempo de menos para o motor. */
         const val MAX_CONFIRM_FRAMES = 3
+
+        const val TRIP_SAVE_INTERVAL_MS = 30_000L
     }
 }

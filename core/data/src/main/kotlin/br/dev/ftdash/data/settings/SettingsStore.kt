@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.gearing.GearProfile
+import br.dev.ftdash.trip.FuelSetup
+import br.dev.ftdash.trip.TripState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -43,6 +45,8 @@ data class AppSettings(
     val redlineRpm: Int = 0,
     val shiftRpm: Int = 0,
     val maxRpm: Int = 0,
+    val fuelSetup: FuelSetup = FuelSetup(),
+    val trip: TripState = TripState(),
     val sourceKind: SourceKind = SourceKind.REPLAY,
     val replaySpeed: Float = 1.0f,
     /** Com o replay, sintetiza velocidade a partir do RPM em vez de usar o GPS. */
@@ -103,6 +107,16 @@ class SettingsStore(private val context: Context) {
             sourceKind = prefs[KEY_SOURCE]
                 ?.let { runCatching { SourceKind.valueOf(it) }.getOrNull() }
                 ?: SourceKind.REPLAY,
+            fuelSetup = FuelSetup(
+                tankLiters = prefs[KEY_TANK_LITERS]?.toDouble() ?: 0.0,
+                injectorFlowCcMin = prefs[KEY_INJECTOR_FLOW]?.toDouble() ?: 0.0,
+                injectorCount = prefs[KEY_INJECTOR_COUNT] ?: 0,
+            ),
+            trip = TripState(
+                totalKm = prefs[KEY_TOTAL_KM]?.toDouble() ?: 0.0,
+                tripKm = prefs[KEY_TRIP_KM]?.toDouble() ?: 0.0,
+                fuelUsedLiters = prefs[KEY_FUEL_USED]?.toDouble() ?: 0.0,
+            ),
             replaySpeed = prefs[KEY_REPLAY_SPEED] ?: 1.0f,
             useSimulatedSpeed = (prefs[KEY_SIMULATED_SPEED] ?: 1) == 1,
         )
@@ -140,6 +154,29 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LEARNED_MAX] = 0 }
     }
 
+    suspend fun saveFuelSetup(setup: FuelSetup) {
+        context.dataStore.edit {
+            it[KEY_TANK_LITERS] = setup.tankLiters.toFloat()
+            it[KEY_INJECTOR_FLOW] = setup.injectorFlowCcMin.toFloat()
+            it[KEY_INJECTOR_COUNT] = setup.injectorCount
+        }
+    }
+
+    /**
+     * Odômetro e combustível.
+     *
+     * Guardados como float: em km, um float tem ~0,01 km de resolução perto de
+     * 100.000 km, o que é bem mais fino do que a precisão do próprio GPS. Quem
+     * chama é que controla a frequência — ver o throttle no ViewModel.
+     */
+    suspend fun saveTrip(trip: TripState) {
+        context.dataStore.edit {
+            it[KEY_TOTAL_KM] = trip.totalKm.toFloat()
+            it[KEY_TRIP_KM] = trip.tripKm.toFloat()
+            it[KEY_FUEL_USED] = trip.fuelUsedLiters.toFloat()
+        }
+    }
+
     suspend fun saveSourceKind(kind: SourceKind) {
         context.dataStore.edit { it[KEY_SOURCE] = kind.name }
     }
@@ -160,6 +197,12 @@ class SettingsStore(private val context: Context) {
         val KEY_SHIFT = intPreferencesKey("shift_rpm")
         val KEY_MAX_RPM = intPreferencesKey("max_rpm")
         val KEY_SOURCE = stringPreferencesKey("source_kind")
+        val KEY_TANK_LITERS = floatPreferencesKey("tank_liters")
+        val KEY_INJECTOR_FLOW = floatPreferencesKey("injector_flow_cc_min")
+        val KEY_INJECTOR_COUNT = intPreferencesKey("injector_count")
+        val KEY_TOTAL_KM = floatPreferencesKey("odo_total_km")
+        val KEY_TRIP_KM = floatPreferencesKey("odo_trip_km")
+        val KEY_FUEL_USED = floatPreferencesKey("fuel_used_liters")
         val KEY_REPLAY_SPEED = floatPreferencesKey("replay_speed")
         val KEY_SIMULATED_SPEED = intPreferencesKey("use_simulated_speed")
     }

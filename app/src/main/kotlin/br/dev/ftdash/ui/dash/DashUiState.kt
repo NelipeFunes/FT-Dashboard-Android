@@ -38,6 +38,13 @@ data class DashUiState(
     val gear: GearState = GearState.Unknown,
     val gearCalibrated: Boolean = false,
 
+    val totalKm: Double = 0.0,
+    val tripKm: Double = 0.0,
+    /** null quando falta configurar tanque, vazão do bico ou quantidade. */
+    val fuelRemainingLiters: Double? = null,
+    val fuelRemainingFraction: Float? = null,
+    val tankLiters: Double = 0.0,
+
     val redlineRpm: Int = 6_500,
     val shiftRpm: Int = 6_200,
     val maxRpm: Int = 8_000,
