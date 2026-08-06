@@ -53,7 +53,10 @@ fun GearIndicator(
     modifier: Modifier = Modifier,
 ) {
     val (text, color) = when {
-        !calibrated -> "–" to Zinc500
+        // "?" e não "–" enquanto não há calibração: um traço em 96sp vira um
+        // bloco cinza no meio do painel, que lê como defeito e não como
+        // "falta configurar".
+        !calibrated -> "?" to Zinc500
         gear is GearState.Engaged -> gear.gear.toString() to Emerald500
         gear is GearState.Shifting -> gear.lastGear.toString() to Amber500
         gear is GearState.Neutral -> "N" to Zinc100

@@ -100,27 +100,28 @@ fun DashScreen(
                         label = "MAP",
                         value = state.fmt { "%+.2f".format(state.mapBar) },
                         unit = "bar",
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                     ValueTile(
                         label = "TPS",
                         value = state.fmt { "%.0f".format(state.tpsPct) },
                         unit = "%",
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                     ValueTile(
                         label = "LAMBDA",
                         // Sonda em erro (bruto 9990) vira "--", nunca um número
                         // que pareça leitura boa.
                         value = state.lambda?.let { "%.2f".format(it) },
-                        unit = "lambda",
+                        unit = "",
                         valueColor = lambdaColor(state.lambda, state.lambdaTarget),
                         secondary = if (state.lambdaTarget > 0f) {
                             "alvo %.2f".format(state.lambdaTarget)
                         } else {
-                            "malha aberta"
+                            // emparelha com "alvo 0.95" e cabe na largura do card
+                            "sem alvo"
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                 }
                 Row(
@@ -130,22 +131,23 @@ fun DashScreen(
                     ValueTile(
                         label = "PONTO",
                         value = state.fmt { "%+.1f".format(state.ignitionDeg) },
-                        unit = "graus",
-                        modifier = Modifier.weight(1f),
+                        unit = "°",
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                     ValueTile(
-                        label = "MALHA FECH.",
+                        label = "MALHA",
                         value = state.fmt { "%+.1f".format(state.closedLoopPct) },
                         unit = "%",
                         valueColor = if (abs(state.closedLoopPct) > 15f) Amber500 else Zinc100,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                     ValueTile(
-                        label = "INJECAO",
+                        label = "INJ",
                         value = state.fmt { "%.2f".format(state.injTimeMs) },
                         unit = "ms",
-                        secondary = "%.0f%%".format(state.injDutyPct),
-                        modifier = Modifier.weight(1f),
+                        // o tempo de injeção sozinho diz pouco sem o duty
+                        secondary = state.fmt { "duty %.0f%%".format(state.injDutyPct) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                 }
             }
