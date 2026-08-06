@@ -124,7 +124,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         // A janela de captura da calibração roda em paralelo, sempre: quando o
         // usuário abre a tela de calibração, ela já tem 2 s de histórico.
         val rpm = _state.value.rpm.toDouble()
-        if (fix.kmh != null) ratioCapture.add(fix.tsMs, rpm, fix.kmh)
+        fix.kmh?.let { ratioCapture.add(fix.tsMs, rpm, it) }
 
         _state.value = _state.value.copy(
             speedKmh = fix.kmh,
