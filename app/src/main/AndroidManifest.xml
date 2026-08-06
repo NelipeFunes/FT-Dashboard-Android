@@ -27,13 +27,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!--
-              Abrir o app quando a FT450 for plugada. O device_filter com o
-              VID/PID também é o que dá permissão persistente de USB: sem ele o
-              Android pede confirmação a cada conexão, o que é inviável numa
-              tela de carro.
-            -->
+        <!--
+          O aviso de "FT450 plugada" vai para uma activity invisível, NÃO para o
+          painel.
+
+          Estava na MainActivity, e no primeiro teste de campo isso trouxe o app
+          para a frente por cima da câmera de ré, com o carro andando de ré — a
+          cada reconexão do barramento. O device_filter continua aqui porque é
+          ele que concede a permissão de USB de forma persistente; o que muda é
+          que ninguém rouba a tela para isso.
+        -->
+        <activity
+            android:name=".UsbAttachActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
