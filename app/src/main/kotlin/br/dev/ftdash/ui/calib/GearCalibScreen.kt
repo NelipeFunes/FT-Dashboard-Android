@@ -42,10 +42,10 @@ import br.dev.ftdash.ui.theme.NumberMedium
 import br.dev.ftdash.ui.theme.NumberSmall
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc400
-import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc500
 import br.dev.ftdash.ui.theme.Zinc800
 import br.dev.ftdash.ui.theme.Zinc900
+import br.dev.ftdash.ui.theme.FtBlack
 import br.dev.ftdash.ui.theme.Zinc950
 
 /**
@@ -79,7 +79,7 @@ fun GearCalibScreen(
     Column(
         modifier
             .fillMaxSize()
-            .background(Zinc950)
+            .background(FtBlack)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

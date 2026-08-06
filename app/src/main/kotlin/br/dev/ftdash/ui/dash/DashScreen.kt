@@ -29,6 +29,7 @@ import br.dev.ftdash.ui.theme.Emerald500
 import br.dev.ftdash.ui.theme.Red500
 import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc800
+import br.dev.ftdash.ui.theme.FtBlack
 import br.dev.ftdash.ui.theme.Zinc950
 import kotlin.math.abs
 
@@ -70,7 +71,7 @@ fun DashScreen(
     Column(
         modifier
             .fillMaxSize()
-            .background(Zinc950),
+            .background(FtBlack),
     ) {
         FtRpmBar(
             rpm = state.rpm,

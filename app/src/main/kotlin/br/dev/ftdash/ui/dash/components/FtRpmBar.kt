@@ -29,6 +29,7 @@ import br.dev.ftdash.ui.theme.Zinc100
 import br.dev.ftdash.ui.theme.Zinc400
 import br.dev.ftdash.ui.theme.Zinc500
 import br.dev.ftdash.ui.theme.Zinc800
+import br.dev.ftdash.ui.theme.FtBlack
 import br.dev.ftdash.ui.theme.Zinc950
 
 /**
@@ -60,7 +61,7 @@ fun FtRpmBar(
     Row(
         modifier
             .fillMaxWidth()
-            .background(Zinc950)
+            .background(FtBlack)
             .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 2.dp),
         verticalAlignment = Alignment.Top,
     ) {

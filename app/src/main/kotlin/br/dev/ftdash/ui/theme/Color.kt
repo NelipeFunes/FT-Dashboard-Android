@@ -6,7 +6,16 @@ import androidx.compose.ui.graphics.Color
  * Paleta do FTManager, transposta. Neutros na escala zinc, verde emerald para
  * "no alvo", âmbar para atenção, vermelho para crítico.
  */
-val Zinc950 = Color(0xFF09090B)  // fundo do painel
+/**
+ * Preto de verdade, não "quase preto".
+ *
+ * O mostrador da FT é preto puro, e num painel isso não é só estética: qualquer
+ * cinza no fundo rouba contraste dos números e, à noite, vira um retângulo
+ * acinzentado luminoso no canto do para-brisa. Todo fundo de tela usa este.
+ */
+val FtBlack = Color(0xFF000000)
+
+val Zinc950 = Color(0xFF09090B)  // recuos e campos, não fundo de tela
 val Zinc900 = Color(0xFF18181B)  // cards
 val Zinc850 = Color(0xFF1F1F23)  // trilho de barras
 val Zinc800 = Color(0xFF27272A)  // bordas

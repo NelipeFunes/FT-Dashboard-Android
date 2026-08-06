@@ -23,6 +23,7 @@ import br.dev.ftdash.data.SourceState
 import br.dev.ftdash.data.SpeedOrigin
 import br.dev.ftdash.ui.theme.Amber500
 import br.dev.ftdash.ui.theme.Emerald500
+import br.dev.ftdash.ui.theme.FtBlack
 import br.dev.ftdash.ui.theme.NumberSmall
 import br.dev.ftdash.ui.theme.Red500
 import br.dev.ftdash.ui.theme.Zinc500
@@ -69,7 +70,10 @@ fun StatusBar(
         modifier
             .fillMaxWidth()
             .height(26.dp)
-            .background(Zinc900)
+            // Preto como o resto do painel. A faixa cinza que havia aqui era o
+            // único retângulo claro da tela e puxava o olho para o rodapé, que
+            // é justamente o que menos importa dirigindo.
+            .background(FtBlack)
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
