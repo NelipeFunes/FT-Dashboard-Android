@@ -15,7 +15,9 @@ partir de velocidade × RPM, com calibração).
 | Parser do protocolo | **53 testes passando**, incluindo os 33.699 frames reais no CRC |
 | Lógica de marcha + calibração | pronta, coberta por teste |
 | Painel (UI) | **rodando** e verificado em AVD Android 11, 1024×600 |
-| Leitura por USB | **escrita, mas nunca executada contra a ECU** — ver abaixo |
+| Calibração de marcha | verificada ponta a ponta: relações salvas, marcha aparece no painel |
+| Escala de RPM | automática (pico registrado, como na FT) ou manual |
+| Leitura por USB | ligada, com aba de diagnóstico — **nunca executada contra a ECU** |
 
 A fonte padrão é o **replay** de frames reais gravados do carro (`app/src/main/assets/fixtures/replay-107.txt`),
 então o app funciona por inteiro sem carro e sem ECU. Toque longo na barra de status alterna replay ⇄ USB.
@@ -72,6 +74,26 @@ Toque longo no indicador de marcha abre a tela. Dois caminhos, mesma lista edit�
 
 Na prática o manual serve para começar e o aprendizado para corrigir: pneu gasto, patinagem e erro de
 catálogo entram na medida real.
+
+## Escala da barra de RPM
+
+Aba **RPM** da configuração, dois modos:
+
+- **Automático** (padrão), igual ao da FT: o teto é sempre o RPM mais alto já registrado. Enquanto o
+  motor não passar de 4.300, a barra vai até 4.300; no dia que passar, o novo valor vira o teto e fica.
+  Como ele não recua sozinho, um pico falso estragaria a escala para sempre — por isso um candidato só é
+  promovido depois de 3 frames seguidos acima do teto atual. O botão *zerar* é a única forma de baixá-lo.
+- **Manual**: corte, aviso de troca e escala digitados.
+
+## Diagnóstico de USB
+
+Aba **USB** da configuração. Lista todo device do barramento com VID:PID, nome, interfaces e endpoints,
+e diz em uma linha em qual caso você está: aparelho que não declara USB host, barramento vazio, FT com
+outro VID:PID, ou só falta de permissão.
+
+Ela existe porque a maior incógnita do projeto é se a porta USB da central faz host de verdade. Sem essa
+tela, uma tentativa que falha no carro volta como "não funcionou"; com ela, volta sabendo qual é o caso —
+e se é do tipo que software resolve.
 
 ## Quando for ligar o USB de verdade
 
