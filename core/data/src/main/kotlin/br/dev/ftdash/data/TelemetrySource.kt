@@ -25,6 +25,14 @@ sealed interface TelemetryEvent {
         val crcFail: Long,
         val resyncs: Long,
         val hz: Float,
+        /**
+         * Bytes por segundo chegando do endpoint.
+         *
+         * Separado da taxa de frames de propósito: é o que distingue "o cabo
+         * caiu" de "o cabo está vivo mas o dado chega corrompido". Sem isso as
+         * duas falhas parecem a mesma coisa no painel.
+         */
+        val bytesPerSec: Int = 0,
     ) : TelemetryEvent
 }
 

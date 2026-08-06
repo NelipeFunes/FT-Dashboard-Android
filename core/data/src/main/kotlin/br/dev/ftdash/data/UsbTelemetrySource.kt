@@ -53,6 +53,21 @@ class UsbTelemetrySource(
     override fun stream(): Flow<TelemetryEvent> = flow {
         val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
 
+        // Espera entre tentativas, crescente. A partida do motor derruba o
+        // barramento e a ECU leva um tempo para voltar; tentar de 2 em 2
+        // segundos para sempre só enche o log e gasta bateria quando o problema
+        // é outro (porta sem host, cabo solto). Uma conexão que dá certo zera
+        // o contador.
+        var failures = 0
+        var permissionRefused = false
+
+        suspend fun backoff() {
+            failures++
+            val wait = (Ft450Protocol.RECONNECT_INTERVAL_MS.toLong() * (1L shl minOf(failures - 1, 3)))
+                .coerceAtMost(MAX_RECONNECT_INTERVAL_MS)
+            delay(wait)
+        }
+
         while (true) {
             emit(TelemetryEvent.Status(SourceState.CONNECTING))
 
@@ -62,14 +77,25 @@ class UsbTelemetrySource(
                 // diferença entre voltar do carro sabendo que a porta não faz
                 // host e voltar sem informação nenhuma.
                 emit(TelemetryEvent.Status(SourceState.ERROR, UsbDiagnostics.scan(context).summary))
-                delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+                // O device sumiu: se voltar, é outra sessão e vale pedir
+                // permissão de novo.
+                permissionRefused = false
+                backoff()
                 continue
             }
             if (!manager.hasPermission(device)) {
+                if (permissionRefused) {
+                    // Não insistir: um diálogo de permissão reaparecendo sozinho
+                    // por cima da tela do carro é pior que ficar sem telemetria.
+                    emit(TelemetryEvent.Status(SourceState.ERROR, "permissão de USB negada — replugue o cabo"))
+                    backoff()
+                    continue
+                }
                 emit(TelemetryEvent.Status(SourceState.CONNECTING, "pedindo permissão de USB"))
                 if (!UsbPermission.request(context, device)) {
+                    permissionRefused = true
                     emit(TelemetryEvent.Status(SourceState.ERROR, "permissão de USB negada"))
-                    delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+                    backoff()
                     continue
                 }
             }
@@ -77,17 +103,20 @@ class UsbTelemetrySource(
             val connection = manager.openDevice(device)
             if (connection == null) {
                 emit(TelemetryEvent.Status(SourceState.ERROR, "não consegui abrir o device"))
-                delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+                backoff()
                 continue
             }
 
+            var connected = false
             try {
                 val session = Session.open(device, connection)
                 if (session == null) {
                     emit(TelemetryEvent.Status(SourceState.ERROR, "interface/endpoints não encontrados"))
                 } else {
+                    connected = true
+                    failures = 0
                     handshake(session)
-                    emitFrames(session)
+                    emitFrames(session, manager)
                 }
             } catch (e: Exception) {
                 emit(TelemetryEvent.Status(SourceState.ERROR, e.message ?: e.javaClass.simpleName))
@@ -95,7 +124,13 @@ class UsbTelemetrySource(
                 connection.close()
             }
 
-            delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+            if (connected) {
+                // Perdeu depois de estar conectado: provavelmente foi a partida
+                // do motor derrubando o barramento. Volta rápido, sem backoff.
+                delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+            } else {
+                backoff()
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -132,26 +167,44 @@ class UsbTelemetrySource(
         s.read(scratch, 800)
     }
 
-    private suspend fun FlowCollector<TelemetryEvent>.emitFrames(s: Session) {
+    /**
+     * Laço de leitura.
+     *
+     * A regra de "caiu" é por **ausência de bytes**, não de frames válidos.
+     * Essa distinção foi o defeito do primeiro teste de campo: com o motor
+     * ligado, o ruído elétrico do alternador e das bobinas derruba parte dos
+     * CRCs, e o app tratava isso como conexão morta — desmontava o handle,
+     * refazia o handshake, conseguia alguns segundos, e caía de novo. Um cabo
+     * que entrega bytes está vivo; o que os bytes trazem é outro problema, e a
+     * resposta a ele é descartar frame ruim, não derrubar a conexão.
+     */
+    private suspend fun FlowCollector<TelemetryEvent>.emitFrames(s: Session, manager: UsbManager) {
         val framer = StreamFramer()
         val sanity = SanityFilter()
         val buffer = ByteArray(4096)
 
-        var lastFrameMs = System.currentTimeMillis()
+        val start = System.currentTimeMillis()
+        var lastBytesMs = start
+        var lastFrameMs = start
         var emitted = 0L
-        var windowStart = lastFrameMs
+        var bytes = 0L
+        var windowStart = start
         var streaming = false
+        var degradedReported = false
 
         while (true) {
             val n = s.read(buffer, Ft450Protocol.READ_TIMEOUT_MS)
             val now = System.currentTimeMillis()
 
             if (n > 0) {
+                lastBytesMs = now
+                bytes += n
                 val frames = framer.feed(buffer, n, now)
                 if (frames.isNotEmpty()) {
                     lastFrameMs = now
-                    if (!streaming) {
+                    if (!streaming || degradedReported) {
                         streaming = true
+                        degradedReported = false
                         emit(TelemetryEvent.Status(SourceState.STREAMING))
                     }
                     for (t in frames) {
@@ -161,26 +214,59 @@ class UsbTelemetrySource(
                 }
             }
 
-            val silence = now - lastFrameMs
+            // 1. O cabo morreu? Só isto justifica refazer tudo.
+            val byteSilence = now - lastBytesMs
             val limit = if (streaming) Ft450Protocol.STALL_TIMEOUT_MS else Ft450Protocol.FIRST_FRAME_TIMEOUT_MS
-            if (silence > limit) {
-                emit(TelemetryEvent.Status(SourceState.STALLED, "sem frame há ${silence}ms"))
+            if (byteSilence > limit) {
+                val stillThere = findDevice(manager) != null
+                emit(
+                    TelemetryEvent.Status(
+                        SourceState.STALLED,
+                        if (stillThere) "sem dados há ${byteSilence}ms" else "FT450 sumiu do barramento",
+                    )
+                )
                 return  // sai para o laço de reconexão
             }
 
+            // 2. Chegando byte mas nenhum frame passa? É ruído, não queda.
+            //    Avisa e continua: derrubar aqui era exatamente o bug.
+            if (streaming && !degradedReported && now - lastFrameMs > DEGRADED_TIMEOUT_MS) {
+                degradedReported = true
+                emit(
+                    TelemetryEvent.Status(
+                        SourceState.STREAMING,
+                        "recebendo dados corrompidos — ruído no cabo?",
+                    )
+                )
+            }
+
             if (now - windowStart >= 1000) {
+                val elapsed = now - windowStart
                 emit(
                     TelemetryEvent.Diagnostics(
                         framesOk = framer.framesOk,
                         crcFail = framer.crcFail,
                         resyncs = framer.resyncs,
-                        hz = emitted * 1000f / (now - windowStart),
+                        hz = emitted * 1000f / elapsed,
+                        bytesPerSec = (bytes * 1000 / elapsed).toInt(),
                     )
                 )
                 emitted = 0
+                bytes = 0
                 windowStart = now
             }
         }
+    }
+
+    companion object {
+        /** Teto do backoff de reconexão. */
+        const val MAX_RECONNECT_INTERVAL_MS = 15_000L
+
+        /**
+         * Bytes chegando mas nenhum frame passando no CRC por este tempo já é
+         * anormal o suficiente para avisar — sem derrubar a conexão.
+         */
+        const val DEGRADED_TIMEOUT_MS = 3_000L
     }
 
     /** Handle aberto: interface reivindicada e endpoints resolvidos. */
