@@ -230,7 +230,6 @@ class UsbTelemetrySource(
         var degradedReported = false
         var lastHeartbeatMs = start
         var framesAtHeartbeat = 0L
-        var crcAtHeartbeat = 0L
 
         // A ECU está no cabo e conta a própria tensão. Se ela cai junto com a
         // conexão, o problema é elétrico e nenhum ajuste de software alcança;
@@ -242,6 +241,20 @@ class UsbTelemetrySource(
         var lastRpm = 0
         var minVbat = Float.MAX_VALUE
         var minVbatRpm = 0
+
+        // O quarto teste trouxe a observação que fecha o caso: em descida,
+        // solto, a comunicação é perfeita; ao encostar no acelerador, cai na
+        // hora. Descida solta é cutoff — bico fechado, faísca mínima. Encostar
+        // no acelerador abre os bicos.
+        //
+        // Ou seja: o que muda entre "funciona" e "cai" não é rotação nem
+        // carga, é **quanta corrente pulsa pelo terra da ECU**. Estas três
+        // grandezas são o que separa as duas condições, e é o que falta para
+        // provar (ou derrubar) essa leitura.
+        var lastCutoff = false
+        var lastTps = 0f
+        var lastDuty = 0f
+        var maxDuty = 0f
 
         while (true) {
             val n = s.read(buffer, Ft450Protocol.READ_TIMEOUT_MS)
@@ -267,6 +280,10 @@ class UsbTelemetrySource(
                             minVbat = clean.vbat
                             minVbatRpm = clean.rpm
                         }
+                        lastCutoff = clean.cutoff
+                        lastTps = clean.tpsPct
+                        lastDuty = clean.injDutyPct
+                        if (clean.injDutyPct > maxDuty) maxDuty = clean.injDutyPct
                         emit(TelemetryEvent.Frame(clean))
                         emitted++
                     }
@@ -298,8 +315,14 @@ class UsbTelemetrySource(
                 )
                 lastVbat?.let {
                     log.add(
-                        "  ao cair: %.2fV %d rpm | minimo da sessao %.2fV a %d rpm".format(
-                            it, lastRpm, minVbat, minVbatRpm,
+                        "  ao cair: %.2fV %d rpm TPS %.0f%% bico %.0f%% %s".format(
+                            it, lastRpm, lastTps, lastDuty,
+                            if (lastCutoff) "CUTOFF" else "injetando",
+                        )
+                    )
+                    log.add(
+                        "  na sessao: min %.2fV a %d rpm, bico max %.0f%%".format(
+                            minVbat, minVbatRpm, maxDuty,
                         )
                     )
                 }
@@ -329,19 +352,18 @@ class UsbTelemetrySource(
             // aparece com o histórico, não com o total.
             if (streaming && now - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS) {
                 val dFrames = framer.framesOk - framesAtHeartbeat
-                val dCrc = framer.crcFail - crcAtHeartbeat
                 log.add(
-                    "%ds: +%d frames, +%d crc, %.2fV %d rpm".format(
+                    "%ds: +%d frames, %.2fV %d rpm bico %.0f%%%s".format(
                         (now - start) / 1000,
                         dFrames,
-                        dCrc,
                         lastVbat ?: 0f,
                         lastRpm,
+                        lastDuty,
+                        if (lastCutoff) " CUTOFF" else "",
                     )
                 )
                 lastHeartbeatMs = now
                 framesAtHeartbeat = framer.framesOk
-                crcAtHeartbeat = framer.crcFail
             }
 
             if (now - windowStart >= 1000) {
