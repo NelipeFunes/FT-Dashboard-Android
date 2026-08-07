@@ -169,7 +169,7 @@ private fun DashContent(
                 Modifier.weight(1f),
             )
             FtChannel(
-                "Ponto",
+                "P. Ignição",
                 state.fmt { "%+.1f".format(state.ignitionDeg) },
                 Zinc100,
                 Modifier.weight(1f),
