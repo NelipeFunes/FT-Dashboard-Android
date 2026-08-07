@@ -228,6 +228,20 @@ class UsbTelemetrySource(
         var windowStart = start
         var streaming = false
         var degradedReported = false
+        var lastHeartbeatMs = start
+        var framesAtHeartbeat = 0L
+        var crcAtHeartbeat = 0L
+
+        // A ECU está no cabo e conta a própria tensão. Se ela cai junto com a
+        // conexão, o problema é elétrico e nenhum ajuste de software alcança;
+        // se a conexão morre com 14 V estáveis, é a porta da central ou a
+        // enumeração, e aí vale insistir no software. Sem estes dois números o
+        // log diz *quando* parou, mas não *sob que condição* — que é a
+        // pergunta que restou.
+        var lastVbat: Float? = null
+        var lastRpm = 0
+        var minVbat = Float.MAX_VALUE
+        var minVbatRpm = 0
 
         while (true) {
             val n = s.read(buffer, Ft450Protocol.READ_TIMEOUT_MS)
@@ -246,7 +260,14 @@ class UsbTelemetrySource(
                         emit(TelemetryEvent.Status(SourceState.STREAMING))
                     }
                     for (t in frames) {
-                        emit(TelemetryEvent.Frame(sanity.apply(t)))
+                        val clean = sanity.apply(t)
+                        lastVbat = clean.vbat
+                        lastRpm = clean.rpm
+                        if (clean.vbat < minVbat) {
+                            minVbat = clean.vbat
+                            minVbatRpm = clean.rpm
+                        }
+                        emit(TelemetryEvent.Frame(clean))
                         emitted++
                     }
                 }
@@ -275,6 +296,13 @@ class UsbTelemetrySource(
                         framer.resyncs,
                     )
                 )
+                lastVbat?.let {
+                    log.add(
+                        "  ao cair: %.2fV %d rpm | minimo da sessao %.2fV a %d rpm".format(
+                            it, lastRpm, minVbat, minVbatRpm,
+                        )
+                    )
+                }
                 return  // sai para o laço de reconexão
             }
 
@@ -288,6 +316,32 @@ class UsbTelemetrySource(
                         "recebendo dados corrompidos — ruído no cabo?",
                     )
                 )
+            }
+
+            // Uma linha por meio minuto enquanto está vivo.
+            //
+            // O tally final sozinho não distingue os dois finais possíveis:
+            // uma sessão que morre limpa (CRC zerado até o último segundo, e
+            // então nada) é queda de energia ou porta; uma que morre depois de
+            // os CRCs subirem é ruído elétrico ganhando da blindagem. São
+            // problemas diferentes, com soluções diferentes — cabo e
+            // aterramento num caso, alimentação no outro —, e a diferença só
+            // aparece com o histórico, não com o total.
+            if (streaming && now - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS) {
+                val dFrames = framer.framesOk - framesAtHeartbeat
+                val dCrc = framer.crcFail - crcAtHeartbeat
+                log.add(
+                    "%ds: +%d frames, +%d crc, %.2fV %d rpm".format(
+                        (now - start) / 1000,
+                        dFrames,
+                        dCrc,
+                        lastVbat ?: 0f,
+                        lastRpm,
+                    )
+                )
+                lastHeartbeatMs = now
+                framesAtHeartbeat = framer.framesOk
+                crcAtHeartbeat = framer.crcFail
             }
 
             if (now - windowStart >= 1000) {
@@ -317,6 +371,16 @@ class UsbTelemetrySource(
          * backoff. A varredura é só uma leitura de lista em memória.
          */
         const val ABSENT_RESCAN_INTERVAL_MS = 1_000L
+
+        /**
+         * Ritmo da linha periódica no log.
+         *
+         * Dez segundos porque é essa a escala do problema: as sessões do
+         * segundo teste de campo duraram 3, 11, 28 e 54 s. Meio minuto daria
+         * zero ou uma amostra em quase todas elas — o suficiente para saber
+         * que houve, não para ver a tensão descendo antes de cair.
+         */
+        const val HEARTBEAT_INTERVAL_MS = 10_000L
 
         /**
          * Bytes chegando mas nenhum frame passando no CRC por este tempo já é
