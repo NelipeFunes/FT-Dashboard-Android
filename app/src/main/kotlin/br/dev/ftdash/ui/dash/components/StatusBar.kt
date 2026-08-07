@@ -69,6 +69,17 @@ fun StatusBar(
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
+
+    /**
+     * Há algo a investigar?
+     *
+     * Stream limpo, sem CRC quebrado e com layout reconhecido é o caso normal —
+     * e no caso normal os contadores não dizem nada que ajude a dirigir.
+     */
+    val showDiagnostics = sourceState != SourceState.STREAMING ||
+        crcFail > 0 ||
+        !layoutKnown
+
     val ledColor = when (sourceState) {
         SourceState.STREAMING -> Emerald500
         SourceState.CONNECTING -> Amber500
@@ -108,22 +119,31 @@ fun StatusBar(
             style = NumberSmall,
             color = Zinc500,
         )
-        Text("%.1f Hz".format(hz), style = NumberSmall, color = Zinc500)
-        // Bytes/s ao lado dos frames: é o que separa "cabo caiu" de "cabo vivo
-        // entregando lixo". Com bytes correndo e CRC subindo, o problema é
-        // ruído elétrico, não conexão.
-        Text("${bytesPerSec}B/s", style = NumberSmall, color = Zinc500)
-        Text("frames $framesOk", style = NumberSmall, color = Zinc500)
-        Text(
-            "crc $crcFail",
-            style = NumberSmall,
-            color = if (crcFail > 0) Amber500 else Zinc500,
-        )
-        Text(
-            if (frameLen == 0) "layout --" else "layout ${frameLen}B",
-            style = NumberSmall,
-            color = if (layoutKnown) Zinc500 else Amber500,
-        )
+        // Contadores só quando há o que investigar.
+        //
+        // Dirigindo, "frames 387" e "layout 107B" não ajudam ninguém — são
+        // instrumento de diagnóstico ocupando a tela o tempo todo. Mas jogá-los
+        // fora tiraria justamente o que responde "por que parou" no carro. Então
+        // eles aparecem quando algo está diferente do esperado e somem quando
+        // não está. Ficam sempre disponíveis na aba USB da configuração.
+        if (showDiagnostics) {
+            Text("%.1f Hz".format(hz), style = NumberSmall, color = Zinc500)
+            // Bytes/s ao lado dos frames: é o que separa "cabo caiu" de "cabo
+            // vivo entregando lixo". Com bytes correndo e CRC subindo, o
+            // problema é ruído elétrico, não conexão.
+            Text("${bytesPerSec}B/s", style = NumberSmall, color = Zinc500)
+            Text("frames $framesOk", style = NumberSmall, color = Zinc500)
+            Text(
+                "crc $crcFail",
+                style = NumberSmall,
+                color = if (crcFail > 0) Amber500 else Zinc500,
+            )
+            Text(
+                if (frameLen == 0) "layout --" else "layout ${frameLen}B",
+                style = NumberSmall,
+                color = if (layoutKnown) Zinc500 else Amber500,
+            )
+        }
         Text(
             when (speedOrigin) {
                 SpeedOrigin.GPS -> "gps ok"
@@ -138,7 +158,10 @@ fun StatusBar(
         // falta espaço. Sem isso, numa tela de 1024 os contadores espremiam o
         // botão CONFIG até ele quebrar em duas linhas.
         Text(
-            sourceDetail.orEmpty(),
+            // O detalhe também só aparece quando há o que investigar: com o
+            // stream limpo ele é informativo ("3000 frames") e não muda nada
+            // para quem está dirigindo.
+            if (showDiagnostics) sourceDetail.orEmpty() else "",
             style = NumberSmall,
             color = Zinc500,
             maxLines = 1,

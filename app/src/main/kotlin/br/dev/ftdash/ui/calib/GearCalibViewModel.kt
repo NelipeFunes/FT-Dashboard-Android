@@ -73,6 +73,13 @@ data class CalibUiState(
 
     // --- aba de USB ---
     val usbReport: UsbBusReport? = null,
+    /** Contadores ao vivo do stream — saíram do painel, mas continuam aqui. */
+    val hz: Float = 0f,
+    val bytesPerSec: Int = 0,
+    val framesOk: Long = 0,
+    val crcFail: Long = 0,
+    val frameLen: Int = 0,
+    val sourceKind: SourceKind = SourceKind.REPLAY,
 
     val message: String? = null,
 )
@@ -139,6 +146,12 @@ class GearCalibViewModel(
                     canCapture = capture.isStable,
                     speedKmh = dash.speedKmh,
                     rpm = dash.rpm,
+                    hz = dash.hz,
+                    bytesPerSec = dash.bytesPerSec,
+                    framesOk = dash.framesOk,
+                    crcFail = dash.crcFail,
+                    frameLen = dash.frameLen,
+                    sourceKind = dash.sourceKind,
                 )
             }
         }

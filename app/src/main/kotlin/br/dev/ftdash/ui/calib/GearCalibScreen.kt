@@ -117,7 +117,7 @@ fun GearCalibScreen(
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
                     CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onResetTrip, onSetInjectorUnit, flowCcMin)
-                    CalibMode.USB -> UsbModePanel(state.usbReport, onRescanUsb, onUseUsb, onUseReplay)
+                    CalibMode.USB -> UsbModePanel(state, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
             Box(Modifier.weight(0.45f)) {
@@ -623,7 +623,7 @@ private fun RowScope.QuickFuelButton(liters: Int, enabled: Boolean, onClick: () 
  */
 @Composable
 private fun UsbModePanel(
-    report: UsbBusReport?,
+    state: CalibUiState,
     onRescan: () -> Unit,
     onUseUsb: () -> Unit,
     onUseReplay: () -> Unit,
@@ -637,11 +637,32 @@ private fun UsbModePanel(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        val report = state.usbReport
+
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ModeTab("RELER", false, onRescan)
             ModeTab("USAR USB", false, onUseUsb)
             ModeTab("USAR REPLAY", false, onUseReplay)
         }
+
+        // Contadores ao vivo. Saíram do painel porque lá não ajudam a dirigir,
+        // mas é aqui que se responde "por que parou" — e é o que interessa
+        // anotar num teste de campo.
+        Text("STREAM AGORA", style = LabelStyle, color = Zinc400)
+        Text(
+            "%s · %.1f Hz · %d B/s".format(state.sourceKind.name, state.hz, state.bytesPerSec),
+            style = NumberSmall,
+            color = Zinc100,
+        )
+        Text(
+            "frames %d · crc %d · layout %s".format(
+                state.framesOk,
+                state.crcFail,
+                if (state.frameLen == 0) "--" else "${state.frameLen}B",
+            ),
+            style = NumberSmall,
+            color = if (state.crcFail > 0) Amber500 else Zinc500,
+        )
 
         if (report == null) {
             Text("Lendo o barramento...", style = NumberSmall, color = Zinc500)
