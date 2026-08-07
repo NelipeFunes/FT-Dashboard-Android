@@ -21,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.SourceState
@@ -132,20 +134,29 @@ fun StatusBar(
             color = if (speedOrigin == SpeedOrigin.GPS) Zinc500 else Amber500,
         )
 
-        Spacer(Modifier.weight(1f))
-
-        if (sourceDetail != null) {
-            Text(sourceDetail, style = NumberSmall, color = Zinc500, maxLines = 1)
-        }
+        // O detalhe é o único item elástico da barra: é ele que encolhe quando
+        // falta espaço. Sem isso, numa tela de 1024 os contadores espremiam o
+        // botão CONFIG até ele quebrar em duas linhas.
+        Text(
+            sourceDetail.orEmpty(),
+            style = NumberSmall,
+            color = Zinc500,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
 
         // Botão de verdade, não toque longo escondido. Toque longo é bom para
         // atalho de quem já sabe; para achar a configuração pela primeira vez,
         // parado no carro, precisa estar escrito na tela.
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         Text(
             "CONFIG",
             style = LabelStyle,
             color = Zinc300,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier
                 .background(Zinc900, RoundedCornerShape(3.dp))
                 .border(1.dp, Zinc700, RoundedCornerShape(3.dp))

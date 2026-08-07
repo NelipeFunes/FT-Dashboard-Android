@@ -55,32 +55,40 @@ private fun labelSmall(): TextStyle {
     )
 }
 
-/** Valor de canal, já escalado. */
+/**
+ * Valor de canal, já escalado.
+ *
+ * Os rótulos continuam em 11sp de propósito: o que faz a tira ser lida de
+ * relance não é o tamanho absoluto, e sim a diferença entre rótulo e número.
+ * Crescer os dois junto manteria a hierarquia igual e só gastaria espaço.
+ */
 @Composable
 private fun valueSmall(): TextStyle {
     val scale = LocalDashScale.current
     return TextStyle(
         fontFamily = MonoFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 17.sp * scale,
+        fontSize = 22.sp * scale,
         fontFeatureSettings = "tnum",
     )
 }
 
 /**
- * Odômetro total e parcial, como na FT.
+ * Odômetro e consumo.
  *
  * A distância é integrada da velocidade do GPS — a ECU deste carro não recebe
  * sensor de roda.
  *
- * Toque abre a configuração; zerar o parcial virou botão escrito lá dentro. O
- * toque longo que zerava daqui era invisível e irreversível — ruim de descobrir
- * e fácil de acionar sem querer.
+ * Mostra **uma** quilometragem, não total e parcial. O parcial continua sendo
+ * contado por dentro, porque é ele que dá sentido à média (distância e
+ * combustível do mesmo trecho), mas exibir os dois gastava duas linhas do
+ * painel para um número que ninguém consulta dirigindo.
+ *
+ * Toque abre a configuração.
  */
 @Composable
 fun OdometerPanel(
     totalKm: Double,
-    tripKm: Double,
     averageKmPerLiter: Double?,
     instantKmPerLiter: Double?,
     onOpenConfig: () -> Unit,
@@ -91,17 +99,9 @@ fun OdometerPanel(
             .clickable(onClick = onOpenConfig)
             .padding(horizontal = 8.dp),
     ) {
-        Text(
-            "Odometro",
-            style = labelSmall(),
-            color = Zinc400,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-        OdoRow("Total", "%.1f".format(totalKm))
-        OdoRow("Parcial", "%.1f".format(tripKm))
+        OdoRow("Odometro", "%.1f".format(totalKm))
 
-        Spacer(Modifier.height(5.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             "Media km/L",
             style = labelSmall(),
@@ -268,7 +268,10 @@ fun FtTankGauge(
             // de um convite a tocar. Sem isso a palavra parecia botão sem ser.
             Text(
                 if (liters == null) "CONFIGURAR ›" else "%.1f L".format(liters),
-                style = labelSmall(),
+                // Os litros são um valor como os outros da tira, e ficavam do
+                // tamanho de rótulo — o único número pequeno no meio dos
+                // grandes puxava o olho pelo motivo errado.
+                style = if (liters == null) labelSmall() else valueSmall(),
                 color = if (liters == null) Amber500 else color,
             )
         }

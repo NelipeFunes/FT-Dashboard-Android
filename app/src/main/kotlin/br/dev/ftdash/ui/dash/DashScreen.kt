@@ -252,7 +252,6 @@ private fun androidx.compose.foundation.layout.RowScope.OdometerPanelSlot(
 ) {
     br.dev.ftdash.ui.dash.components.OdometerPanel(
         totalKm = state.totalKm,
-        tripKm = state.tripKm,
         averageKmPerLiter = state.averageKmPerLiter,
         instantKmPerLiter = state.instantKmPerLiter,
         onOpenConfig = onOpenConfig,

@@ -66,12 +66,15 @@ fun FtRpmBar(
         modifier
             .fillMaxWidth()
             .background(FtBlack)
-            .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 2.dp),
+            .padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 2.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // Número grande à esquerda, como na FT
+        // O número encostado na borda esquerda, com a largura reservada só para
+        // o que ele precisa: 4 dígitos e o "RPM". A largura é FIXA de propósito
+        // — deixar o bloco se ajustar ao conteúdo faria a barra pular de lugar
+        // toda vez que a rotação passasse de 999 para 1000.
         Row(
-            Modifier.width(190.dp.scaled(scale)),
+            Modifier.width(RPM_BLOCK_WIDTH.scaled(scale)),
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
@@ -84,17 +87,19 @@ fun FtRpmBar(
                 ),
                 color = if (blinking) FtRed else if (hasData) Zinc100 else Zinc500,
                 textAlign = TextAlign.End,
+                maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 "RPM",
                 style = TextStyle(fontFamily = MonoFamily, fontSize = 13.sp * scale),
                 color = Zinc400,
+                maxLines = 1,
                 modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
             )
         }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
 
         Column(Modifier.weight(1f)) {
             Canvas(
@@ -182,5 +187,12 @@ private val SCALE_STOPS = arrayOf(
 )
 
 val FtRed = Color(0xFFE30000)
+
+/**
+ * Largura do bloco do número, medida para caber 4 dígitos em 44sp mono mais o
+ * rótulo "RPM" — e nada além disso. Era 190dp, e os ~45dp que sobravam viraram
+ * comprimento de barra, que é onde eles valem mais.
+ */
+private val RPM_BLOCK_WIDTH = 145.dp
 
 private const val SHIFT_BLINK_HALF_PERIOD_MS = 83L

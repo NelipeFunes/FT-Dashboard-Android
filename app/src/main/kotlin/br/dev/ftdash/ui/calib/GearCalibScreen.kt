@@ -541,7 +541,7 @@ private fun FuelModePanel(
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                 modifier = Modifier.weight(1.6f),
             ) {
-                Text("ZERAR PARCIAL E MEDIA", style = LabelStyle)
+                Text("ZERAR MEDIA", style = LabelStyle)
             }
         }
 
