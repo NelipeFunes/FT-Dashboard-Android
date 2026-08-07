@@ -79,17 +79,23 @@ fun FtRpmBar(
                 val w = size.width
                 val h = size.height
                 val hMin = h * MIN_HEIGHT_RATIO
-                val knee = (KNEE_RPM.toFloat() / safeMax).coerceIn(0.25f, 0.75f)
+                val riseFrom = (RISE_FROM_RPM.toFloat() / safeMax).coerceIn(0.1f, 0.8f)
+                val riseTo = (RISE_TO_RPM.toFloat() / safeMax).coerceIn(riseFrom + 0.1f, 1f)
 
-                /** Altura da barra em x: baixa e constante até o joelho, depois subindo. */
+                /**
+                 * Altura da barra em x: reta e baixa até [RISE_FROM_RPM],
+                 * subindo até [RISE_TO_RPM], e reta no topo depois disso.
+                 */
                 fun heightAt(x: Float): Float {
                     val f = x / w
-                    if (f <= knee) return hMin
-                    val t = (f - knee) / (1f - knee)
-                    // t² e não t: a derivada é zero no joelho, então a curva
-                    // sai da parte reta sem quina. Uma subida linear deixaria
-                    // um bico visível justamente no meio da barra.
-                    return hMin + (h - hMin) * t * t
+                    if (f <= riseFrom) return hMin
+                    if (f >= riseTo) return h
+                    val t = (f - riseFrom) / (riseTo - riseFrom)
+                    // Smoothstep, não t²: agora há trecho reto nas DUAS pontas,
+                    // e t² só é suave na de baixo — deixaria uma quina visível
+                    // no encontro com o platô do topo. t²(3−2t) tem derivada
+                    // zero nos dois extremos e emenda liso dos dois lados.
+                    return hMin + (h - hMin) * t * t * (3f - 2f * t)
                 }
 
                 fun wedge(from: Float, to: Float) = Path().apply {
@@ -214,19 +220,22 @@ private val SCALE_STOPS = arrayOf(
 val FtRed = Color(0xFFE30000)
 
 /** Altura da barra no trecho baixo, em fração da altura total. */
-private const val MIN_HEIGHT_RATIO = 0.20f
+private const val MIN_HEIGHT_RATIO = 0.34f
 
 /**
- * Rotação em que a barra começa a subir — a metade da régua de 1 a 8.
+ * Onde a barra começa e termina de subir.
  *
- * Abaixo disso ela é uma faixa fina e constante: quase todo o tempo de rua é
- * gasto aí, e uma barra que já vem crescendo desde a marcha lenta gasta altura
- * onde não há nada a destacar. A subida fica reservada para a faixa que importa.
+ * Abaixo de [RISE_FROM_RPM] ela é uma faixa constante: quase todo o tempo de
+ * rua é passado aí, e uma barra que já vem crescendo desde a marcha lenta gasta
+ * altura onde não há nada a destacar. Acima de [RISE_TO_RPM] ela também é
+ * constante, agora no topo — passado o giro útil, o que importa é *estar* lá,
+ * não quanto ainda falta para o fim da régua.
  *
- * É uma ROTAÇÃO, não uma fração da largura: amarrar à largura faria o ponto de
- * subida escorregar se a régua crescesse além de 8.000.
+ * São ROTAÇÕES, não frações da largura: amarrar à largura faria a barra mudar
+ * de forma sozinha se a régua crescesse além de 8.000 pelo aprendizado do pico.
  */
-private const val KNEE_RPM = 4_000
+private const val RISE_FROM_RPM = 4_000
+private const val RISE_TO_RPM = 7_000
 
 /** Segmentos usados para aproximar a curva. */
 private const val CURVE_STEPS = 48
