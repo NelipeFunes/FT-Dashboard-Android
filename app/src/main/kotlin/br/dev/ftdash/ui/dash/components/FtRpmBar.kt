@@ -3,12 +3,15 @@ package br.dev.ftdash.ui.dash.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -91,16 +94,17 @@ fun FtRpmBar(
                     if (f <= riseFrom) return hMin
                     if (f >= riseTo) return h
                     val t = (f - riseFrom) / (riseTo - riseFrom)
-                    // Ease-out: t(2−t). Sobe rápido logo depois do joelho e vai
-                    // assentando até encostar no platô com derivada zero.
+                    // Exponencial normalizada: (e^kt − 1)/(e^k − 1). Sai rente à
+                    // reta e vai ficando cada vez mais íngreme, que é a silhueta
+                    // do mostrador da FT.
                     //
-                    // Já foi smoothstep, t²(3−2t), e o resultado parecia
-                    // quebrado: como ele é achatado nas duas pontas, só ganhava
-                    // um quarto da altura no primeiro terço da faixa, e a barra
-                    // dava a impressão de só começar a subir lá pelos 5.000.
-                    // Com ease-out, metade da altura já veio aos ~4.900 — a
-                    // subida é percebida onde ela de fato começa.
-                    return hMin + (h - hMin) * t * (2f - t)
+                    // Ela é CÔNCAVA PARA CIMA, então cresce devagar no começo —
+                    // o oposto do ease-out que estava aqui. [RISE_CURVE_K]
+                    // controla quanto: baixo aproxima da reta, alto joga toda a
+                    // subida para o fim da faixa.
+                    val e = kotlin.math.exp(RISE_CURVE_K)
+                    val curved = (kotlin.math.exp(RISE_CURVE_K * t) - 1f) / (e - 1f)
+                    return hMin + (h - hMin) * curved
                 }
 
                 fun wedge(from: Float, to: Float) = Path().apply {
@@ -190,11 +194,24 @@ fun FtRpmBar(
             }
         }
 
-        // Régua em milhares, sob a barra e na largura inteira
-        Row(Modifier.fillMaxWidth()) {
+        // Régua em milhares, alinhada à POSIÇÃO de cada milhar na barra.
+        //
+        // Antes era uma Row de células de peso igual com o texto centralizado, e
+        // isso punha o rótulo no MEIO da célula: o "1" caía em 6,25% da largura
+        // quando 1.000 rpm está em 12,5%. Toda a régua ficava meia divisão à
+        // esquerda, e o preenchimento parecia adiantado — a 1.850 rpm a barra
+        // já passava do "2".
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
             val steps = (safeMax / 1000).coerceAtLeast(1)
+            val full = maxWidth
             for (i in 1..steps) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                val center = full * i / steps
+                Box(
+                    Modifier
+                        .width(TICK_WIDTH)
+                        .offset(x = (center - TICK_WIDTH / 2).coerceIn(0.dp, full - TICK_WIDTH)),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
                         i.toString(),
                         style = TextStyle(
@@ -242,8 +259,20 @@ private const val MIN_HEIGHT_RATIO = 0.34f
 private const val RISE_FROM_RPM = 4_000
 private const val RISE_TO_RPM = 7_000
 
+/**
+ * Quanto a subida é exponencial.
+ *
+ * É o `k` de `(e^kt − 1)/(e^k − 1)`. Perto de zero a curva vira uma reta;
+ * quanto maior, mais ela se cola no chão no começo e mais íngreme termina.
+ * 2,0 dá uma curva visível sem esconder a subida na primeira metade da faixa.
+ */
+private const val RISE_CURVE_K = 2.0f
+
 /** Segmentos usados para aproximar a curva. */
 private const val CURVE_STEPS = 48
+
+/** Largura da caixa de cada número da régua, para centrá-lo na marca. */
+private val TICK_WIDTH = 20.dp
 
 /**
  * Altura do bloco da barra.
