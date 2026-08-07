@@ -264,9 +264,13 @@ private const val RISE_TO_RPM = 7_000
  *
  * É o `k` de `(e^kt − 1)/(e^k − 1)`. Perto de zero a curva vira uma reta;
  * quanto maior, mais ela se cola no chão no começo e mais íngreme termina.
- * 2,0 dá uma curva visível sem esconder a subida na primeira metade da faixa.
+ *
+ * Começou em 2,0 e desceu para 1,3: com 2,0 a barra só tinha ganhado 6% da
+ * altura aos 4.500 rpm, e a subida parecia começar bem depois do joelho. Em
+ * 1,3 são 9% aos 4.500 e 20% aos 5.000 — o formato exponencial continua, mas a
+ * saída do joelho é percebida onde ela acontece.
  */
-private const val RISE_CURVE_K = 2.0f
+private const val RISE_CURVE_K = 1.3f
 
 /** Segmentos usados para aproximar a curva. */
 private const val CURVE_STEPS = 48

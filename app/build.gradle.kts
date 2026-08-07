@@ -18,8 +18,8 @@ android {
         // Android 9-11 e o app é sideload, não Play Store — subir o targetSdk
         // só traria restrições novas sem nenhum ganho aqui.
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.9.10"
+        versionCode = 13
+        versionName = "0.9.11"
     }
 
     signingConfigs {
