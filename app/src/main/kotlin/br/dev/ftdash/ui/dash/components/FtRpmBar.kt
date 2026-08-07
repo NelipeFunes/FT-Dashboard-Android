@@ -79,13 +79,29 @@ fun FtRpmBar(
                 val w = size.width
                 val h = size.height
                 val hMin = h * MIN_HEIGHT_RATIO
+                val knee = (KNEE_RPM.toFloat() / safeMax).coerceIn(0.25f, 0.75f)
 
-                // Topo da cunha em x: desce de h-hMin (esquerda) até 0 (direita)
-                fun topAt(x: Float) = (h - hMin) * (1f - x / w)
+                /** Altura da barra em x: baixa e constante até o joelho, depois subindo. */
+                fun heightAt(x: Float): Float {
+                    val f = x / w
+                    if (f <= knee) return hMin
+                    val t = (f - knee) / (1f - knee)
+                    // t² e não t: a derivada é zero no joelho, então a curva
+                    // sai da parte reta sem quina. Uma subida linear deixaria
+                    // um bico visível justamente no meio da barra.
+                    return hMin + (h - hMin) * t * t
+                }
 
                 fun wedge(from: Float, to: Float) = Path().apply {
-                    moveTo(from, topAt(from))
-                    lineTo(to, topAt(to))
+                    moveTo(from, h - heightAt(from))
+                    // A curva é aproximada por segmentos: o suficiente para o
+                    // olho não distinguir, e mais simples de acertar que
+                    // encaixar bézier no ponto de tangência.
+                    val steps = CURVE_STEPS
+                    for (i in 1..steps) {
+                        val x = from + (to - from) * i / steps
+                        lineTo(x, h - heightAt(x))
+                    }
                     lineTo(to, h)
                     lineTo(from, h)
                     close()
@@ -197,8 +213,23 @@ private val SCALE_STOPS = arrayOf(
 
 val FtRed = Color(0xFFE30000)
 
-/** Altura da cunha na ponta esquerda, em fração da altura total. */
+/** Altura da barra no trecho baixo, em fração da altura total. */
 private const val MIN_HEIGHT_RATIO = 0.20f
+
+/**
+ * Rotação em que a barra começa a subir — a metade da régua de 1 a 8.
+ *
+ * Abaixo disso ela é uma faixa fina e constante: quase todo o tempo de rua é
+ * gasto aí, e uma barra que já vem crescendo desde a marcha lenta gasta altura
+ * onde não há nada a destacar. A subida fica reservada para a faixa que importa.
+ *
+ * É uma ROTAÇÃO, não uma fração da largura: amarrar à largura faria o ponto de
+ * subida escorregar se a régua crescesse além de 8.000.
+ */
+private const val KNEE_RPM = 4_000
+
+/** Segmentos usados para aproximar a curva. */
+private const val CURVE_STEPS = 48
 
 /**
  * Altura do bloco da barra.
