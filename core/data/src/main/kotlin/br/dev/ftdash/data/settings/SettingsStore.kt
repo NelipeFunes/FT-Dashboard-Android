@@ -84,8 +84,18 @@ data class AppSettings(
         }
 
     companion object {
-        /** Escala mínima, só para a barra existir antes do primeiro pico. */
-        const val FLOOR_RPM = 3_000
+        /**
+         * Escala mínima da barra: **8.000 rpm**, ou seja a régua 1–8.
+         *
+         * Não é só um piso de segurança — é a escala normal deste painel, como
+         * a FT que mostra 1–10 fixo. Uma régua que encolhe conforme o pico
+         * aprendido obrigaria a reler a escala a cada sessão, e o ponto de uma
+         * barra de RPM é justamente ser lida sem ler número.
+         *
+         * O aprendizado continua valendo para cima: se o motor passar de 8.000,
+         * a régua cresce junto e não volta mais.
+         */
+        const val FLOOR_RPM = 8_000
 
         /** No automático o aviso de troca vem um pouco antes do pico registrado. */
         const val AUTO_SHIFT_FRACTION = 0.95f
