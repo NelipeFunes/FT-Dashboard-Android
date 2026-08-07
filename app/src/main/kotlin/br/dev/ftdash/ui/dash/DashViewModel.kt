@@ -256,6 +256,12 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsStore.saveTrip(trip.state)
     }
 
+    /** Corrige o nível para o que há de fato no tanque. */
+    fun setTankLevel(liters: Double) = viewModelScope.launch {
+        trip.setRemainingLiters(liters, fuelSetup)
+        container.settingsStore.saveTrip(trip.state)
+    }
+
     /** Zera o parcial, sem tocar no total. */
     fun resetTrip() = viewModelScope.launch {
         trip.resetTrip()

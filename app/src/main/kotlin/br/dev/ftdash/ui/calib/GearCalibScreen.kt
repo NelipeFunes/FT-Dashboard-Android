@@ -75,6 +75,7 @@ fun GearCalibScreen(
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
     onAddFuel: (Double) -> Unit,
+    onSetTankLevel: (Double) -> Unit,
     onResetTrip: () -> Unit,
     onSetInjectorUnit: (InjectorUnit) -> Unit,
     flowCcMin: Double?,
@@ -116,7 +117,7 @@ fun GearCalibScreen(
                     CalibMode.LEARN -> LearnModePanel(state, onSelectGear, onCapture)
                     CalibMode.MANUAL -> ManualModePanel(state, manualPreview, onManualField, onApplyManual)
                     CalibMode.RPM -> RpmModePanel(state, onSetRpmMode, onRpmField, onApplyRpm, onResetPeak)
-                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onResetTrip, onSetInjectorUnit, flowCcMin)
+                    CalibMode.FUEL -> FuelModePanel(state, onFuelField, onApplyFuel, onFillTank, onAddFuelField, onAddFuel, onSetTankLevel, onResetTrip, onSetInjectorUnit, flowCcMin)
                     CalibMode.USB -> UsbModePanel(state, onRescanUsb, onUseUsb, onUseReplay)
                 }
             }
@@ -428,6 +429,7 @@ private fun FuelModePanel(
     onFillTank: () -> Unit,
     onAddFuelField: (String) -> Unit,
     onAddFuel: (Double) -> Unit,
+    onSetTankLevel: (Double) -> Unit,
     onResetTrip: () -> Unit,
     onSetInjectorUnit: (InjectorUnit) -> Unit,
     flowCcMin: Double?,
@@ -550,23 +552,29 @@ private fun FuelModePanel(
         // Os valores redondos cobrem quase toda parada real e resolvem em um
         // toque — digitar num teclado numérico dentro do carro, parado no
         // posto, é o caminho lento. O campo livre continua para o resto.
-        Text("ABASTECI", style = LabelStyle, color = Zinc400)
+        Text("ABASTECI  (+)", style = LabelStyle, color = Zinc400)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (liters in QUICK_FUEL_LITERS) {
                 QuickFuelButton(liters, configured) { onAddFuel(liters.toDouble()) }
             }
         }
 
+        // Um campo, duas ações. "+ SOMAR" registra um abastecimento; "= TENHO"
+        // corrige o nível para o que há de fato no tanque — olhando a boia, ou
+        // depois de uma parada com o app desligado, em que o consumo não foi
+        // contado. Somar 20 num tanque de nível desconhecido não é a mesma
+        // coisa que dizer que ele tem 20, e os símbolos deixam isso à vista.
         Row(verticalAlignment = Alignment.CenterVertically) {
             NumField(
-                "OUTRO",
+                "LITROS",
                 state.addFuelLiters,
                 Modifier.weight(1f),
                 decimal = true,
-                placeholder = "litros",
+                placeholder = "quantidade",
             ) { onAddFuelField(it) }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             val typed = state.addFuelLiters.replace(',', '.').toDoubleOrNull()
+            val usable = configured && typed != null && typed >= 0
             Button(
                 onClick = {
                     typed?.let {
@@ -574,7 +582,7 @@ private fun FuelModePanel(
                         onAddFuelField("")
                     }
                 },
-                enabled = configured && typed != null && typed > 0,
+                enabled = usable && (typed ?: 0.0) > 0,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Emerald500,
                     contentColor = Zinc950,
@@ -582,8 +590,30 @@ private fun FuelModePanel(
                     disabledContentColor = Zinc500,
                 ),
                 shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
             ) {
-                Text("SOMAR", style = LabelStyle)
+                Text("+ SOMAR", style = LabelStyle)
+            }
+            Spacer(Modifier.width(6.dp))
+            Button(
+                onClick = {
+                    typed?.let {
+                        onSetTankLevel(it)
+                        onAddFuelField("")
+                    }
+                },
+                enabled = usable,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Zinc950,
+                    contentColor = Emerald500,
+                    disabledContainerColor = Zinc900,
+                    disabledContentColor = Zinc600,
+                ),
+                border = BorderStroke(1.dp, if (usable) Emerald500 else Zinc800),
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Text("= TENHO", style = LabelStyle)
             }
         }
     }

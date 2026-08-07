@@ -279,6 +279,23 @@ class TripComputer(initial: TripState = TripState()) {
     }
 
     /**
+     * Define quanto há no tanque **agora**, em litros.
+     *
+     * Diferente de [addFuel]: aquele soma ao que a conta acha que existe, este
+     * substitui a conta. É o que se usa quando se sabe o nível de verdade —
+     * olhando a boia do carro, ou depois de uma parada em que o app estava
+     * desligado e o consumo não foi contado.
+     *
+     * Como corrige a estimativa em vez de registrar um abastecimento, também
+     * **não mexe na média**: quanto o carro fez por litro no caminho até aqui
+     * não muda porque alguém acertou o medidor.
+     */
+    fun setRemainingLiters(liters: Double, setup: FuelSetup) {
+        if (!setup.isComplete || liters < 0.0) return
+        tankUsedLiters = (setup.tankLiters - liters).coerceIn(0.0, setup.tankLiters)
+    }
+
+    /**
      * Zera o parcial e a média junto — os dois são a mesma viagem.
      *
      * O total e o nível do tanque não são tocados.

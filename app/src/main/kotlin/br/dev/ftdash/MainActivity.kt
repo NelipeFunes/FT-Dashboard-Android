@@ -142,6 +142,7 @@ private fun AppRoot(container: AppContainer) {
                 onFillTank = { dashViewModel.fillTank() },
                 onAddFuelField = { calibViewModel.updateAddFuelField(it) },
                 onAddFuel = { liters -> dashViewModel.addFuel(liters) },
+                onSetTankLevel = { liters -> dashViewModel.setTankLevel(liters) },
                 onResetTrip = { dashViewModel.resetTrip() },
                 onSetInjectorUnit = { calibViewModel.setInjectorUnit(it) },
                 flowCcMin = calibViewModel.injectorFlowCcMin(),

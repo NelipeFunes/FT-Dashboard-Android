@@ -90,6 +90,22 @@ sem ninguém ter andado nada.
 Consequência: encher ou somar litros mexe no nível e não na média; zerar o parcial zera a média e não
 mexe no nível.
 
+### Somar litros ≠ dizer quanto tem
+
+São duas operações diferentes, e a aba TANQUE expõe as duas no mesmo campo:
+
+| botão | operação | quando |
+|---|---|---|
+| `+ SOMAR` | `tankUsedLiters -= litros` | abastecimento — entrou combustível de verdade |
+| `= TENHO` | `tankUsedLiters = tanque - litros` | correção — o nível é este, esqueça a estimativa |
+
+`= TENHO` existe porque a estimativa erra: o app fica desligado enquanto o carro anda com o rádio em
+outra fonte, alguém abastece sem registrar, a vazão configurada não é exatamente a do bico. Sem uma
+forma de dizer o nível de verdade, o único jeito de acertar seria encher o tanque.
+
+E `= TENHO` **não mexe na média** — corrigir o medidor não muda quantos quilômetros o carro já fez por
+litro no caminho até aqui.
+
 ### A conta
 
 ```

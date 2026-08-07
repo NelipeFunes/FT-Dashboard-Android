@@ -407,6 +407,49 @@ class TripComputerTest {
     }
 
     @Test
+    fun `definir o nivel substitui a estimativa`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(1801) { trip.onInjection(t, 50f, setup); t += 1000 }
+        // a conta acha que sobraram ~25,8 L
+        assertEquals(45.0 - 19.2, trip.remainingLiters(setup)!!, 0.1)
+
+        // mas eu olhei e sei que tem 20
+        trip.setRemainingLiters(20.0, setup)
+        assertEquals(20.0, trip.remainingLiters(setup)!!, 1e-9)
+    }
+
+    @Test
+    fun `definir o nivel nao passa da capacidade nem fica negativo`() {
+        val trip = TripComputer()
+        trip.setRemainingLiters(80.0, setup)
+        assertEquals(45.0, trip.remainingLiters(setup)!!, 1e-9)
+
+        trip.setRemainingLiters(0.0, setup)
+        assertEquals(0.0, trip.remainingLiters(setup)!!, 1e-9)
+
+        // valor sem sentido não mexe em nada
+        trip.setRemainingLiters(-5.0, setup)
+        assertEquals(0.0, trip.remainingLiters(setup)!!, 1e-9)
+    }
+
+    @Test
+    fun `definir o nivel nao mexe na media`() {
+        val trip = TripComputer()
+        var t = 0L
+        repeat(3601) {
+            trip.onSpeedFix(t, 60f)
+            trip.onInjection(t, 12.5f, setup)
+            t += 1000
+        }
+        val average = trip.averageKmPerLiter!!
+
+        // acertar o medidor não muda o que o carro já fez por litro
+        trip.setRemainingLiters(20.0, setup)
+        assertEquals(average, trip.averageKmPerLiter!!, 1e-9)
+    }
+
+    @Test
     fun `duty invalido e ignorado`() {
         val trip = TripComputer()
         var t = 0L
