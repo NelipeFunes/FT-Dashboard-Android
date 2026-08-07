@@ -162,9 +162,12 @@ class UsbTelemetrySource(
             }
 
             if (connected) {
-                // Perdeu depois de estar conectado: provavelmente foi a partida
-                // do motor derrubando o barramento. Volta rápido, sem backoff.
-                delay(Ft450Protocol.RECONNECT_INTERVAL_MS.toLong())
+                // Perdeu depois de estar conectado: volta imediatamente. Quem
+                // controla o ritmo daqui para a frente é a varredura de device
+                // ausente, que já espera 1 s por vez. Esperar mais 2 s aqui era
+                // somar cegueira em cima de cegueira — se o device já voltou,
+                // nada justifica não reconectar agora.
+                delay(POST_SESSION_DELAY_MS)
             } else {
                 backoff()
             }
@@ -293,8 +296,18 @@ class UsbTelemetrySource(
             // 1. O cabo morreu? Só isto justifica refazer tudo.
             val byteSilence = now - lastBytesMs
             val limit = if (streaming) Ft450Protocol.STALL_TIMEOUT_MS else Ft450Protocol.FIRST_FRAME_TIMEOUT_MS
-            if (byteSilence > limit) {
-                val stillThere = findDevice(manager) != null
+
+            // Os 3 s de silêncio existem para tolerar soluço: a ECU atrasou,
+            // o buffer engasgou, vale esperar. Mas um device que saiu da lista
+            // do Android não é soluço — ele foi embora, e esperar o prazo
+            // inteiro é ficar 3 s parado olhando para uma porta vazia.
+            //
+            // No carro isso é a diferença entre o painel piscar e o painel
+            // morrer: a queda acontece a cada poucos segundos ao acelerar, e
+            // quase todo o tempo cego era este prazo.
+            val gone = byteSilence > GONE_CHECK_MS && findDevice(manager) == null
+            if (gone || byteSilence > limit) {
+                val stillThere = !gone && findDevice(manager) != null
                 val why = if (stillThere) "sem dados há ${byteSilence}ms" else "FT450 sumiu do barramento"
                 emit(TelemetryEvent.Status(SourceState.STALLED, why))
                 // A linha que decide o diagnóstico da próxima ida ao carro:
@@ -393,6 +406,16 @@ class UsbTelemetrySource(
          * backoff. A varredura é só uma leitura de lista em memória.
          */
         const val ABSENT_RESCAN_INTERVAL_MS = 1_000L
+
+        /**
+         * A partir de quanto silêncio vale conferir se o device ainda existe.
+         * Curto porque a consulta é barata e só roda quando não está chegando
+         * byte nenhum — em stream normal esse caminho nunca é tocado.
+         */
+        const val GONE_CHECK_MS = 300L
+
+        /** Respiro entre uma sessão que caiu e a próxima tentativa. */
+        const val POST_SESSION_DELAY_MS = 150L
 
         /**
          * Ritmo da linha periódica no log.

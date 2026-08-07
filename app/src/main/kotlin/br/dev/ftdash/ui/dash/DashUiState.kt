@@ -64,4 +64,18 @@ data class DashUiState(
     val layoutKnown: Boolean = true,
     /** Ainda não chegou nenhum frame: a tela mostra `--` em tudo. */
     val hasData: Boolean = false,
+    /**
+     * A fonte caiu mas o último quadro ainda está na tela.
+     *
+     * Existe porque no carro a conexão cai a cada poucos segundos ao acelerar,
+     * e apagar tudo para reacender 2 s depois deixa o painel pior que inútil —
+     * pisca tanto que não dá para ler nada. Segurar o último quadro por alguns
+     * segundos cobre a reconexão inteira e a tela fica legível.
+     *
+     * O que não se pode é fingir que o número é atual: enquanto isto for
+     * verdade o painel inteiro aparece esmaecido, e a barra de status diz o
+     * que está acontecendo. Dado velho identificado é informação; dado velho
+     * disfarçado de vivo é mentira.
+     */
+    val stale: Boolean = false,
 )

@@ -13,6 +13,7 @@ import br.dev.ftdash.gearing.GearState
 import br.dev.ftdash.gearing.RatioCapture
 import br.dev.ftdash.trip.FuelSetup
 import br.dev.ftdash.trip.TripComputer
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,9 +48,30 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
         observeSettings()
         observeTelemetry()
         observeSpeed()
+        expireStaleData()
+    }
+
+    /**
+     * Apaga o painel quando o último quadro fica velho demais para valer.
+     *
+     * Não dá para fazer isso na chegada dos dados: o que precisa acontecer é
+     * justamente a **ausência** deles. Sem este relógio, uma queda que não
+     * volta deixaria os últimos números congelados na tela para sempre.
+     */
+    private fun expireStaleData() = viewModelScope.launch {
+        while (true) {
+            delay(STALE_CHECK_MS)
+            val s = _state.value
+            if (s.stale && System.currentTimeMillis() - lastFrameAtMs > STALE_GRACE_MS) {
+                _state.value = s.copy(hasData = false, stale = false)
+            }
+        }
     }
 
     private var sourceRestored = false
+
+    /** Relógio de parede da chegada do último frame — base do [expireStaleData]. */
+    private var lastFrameAtMs = 0L
 
     /**
      * As preferências já chegaram do disco?
@@ -109,6 +131,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
             when (event) {
                 is TelemetryEvent.Frame -> {
                     val t = event.telemetry
+                    lastFrameAtMs = System.currentTimeMillis()
                     estimator.onRpm(t.tsMs, t.rpm)
                     container.simulatedSpeedSource.onRpm(t.rpm)
                     learnMaxRpm(t.rpm)
@@ -153,6 +176,7 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                         frameLen = t.frameLen,
                         layoutKnown = t.layoutKnown,
                         hasData = true,
+                        stale = false,
                         totalKm = trip.totalKm,
                         tripKm = trip.tripKm,
                         averageKmPerLiter = trip.averageKmPerLiter,
@@ -171,11 +195,14 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
                     val lost = event.state == SourceState.ERROR ||
                         event.state == SourceState.STALLED ||
                         restarting
+                    // Perder a fonte não apaga a tela na hora: marca como
+                    // velha e deixa [expireStaleData] apagar se a volta
+                    // demorar. Ver o KDoc de DashUiState.stale.
                     _state.value = _state.value.copy(
                         sourceState = event.state,
                         sourceDetail = event.detail,
                         sourceKind = container.telemetryRepository.sourceKind.value,
-                        hasData = if (lost) false else _state.value.hasData,
+                        stale = if (lost) _state.value.hasData else _state.value.stale,
                         hz = if (restarting) 0f else _state.value.hz,
                         bytesPerSec = if (restarting) 0 else _state.value.bytesPerSec,
                         framesOk = if (restarting) 0 else _state.value.framesOk,
@@ -305,6 +332,19 @@ class DashViewModel(private val container: AppContainer) : ViewModel() {
     companion object {
         /** Quanto tempo o marcador de pico segura antes de voltar ao valor atual. */
         const val PEAK_HOLD_MS = 1_200L
+
+        /**
+         * Por quanto tempo o último quadro continua na tela depois da queda.
+         *
+         * Cinco segundos cobrem com folga a reconexão medida (~1,2 s: detectar
+         * a saída do barramento, achar o device, handshake) e ainda aguentam
+         * uma volta que demore. Passou disso, o número já não descreve o motor
+         * e sai da tela.
+         */
+        const val STALE_GRACE_MS = 5_000L
+
+        /** Ritmo do relógio que expira o quadro velho. */
+        const val STALE_CHECK_MS = 500L
 
         /** ~0,2 s a 17 Hz: tempo demais para ruído, tempo de menos para o motor. */
         const val MAX_CONFIRM_FRAMES = 3
