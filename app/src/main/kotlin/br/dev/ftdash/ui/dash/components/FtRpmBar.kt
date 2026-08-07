@@ -91,11 +91,16 @@ fun FtRpmBar(
                     if (f <= riseFrom) return hMin
                     if (f >= riseTo) return h
                     val t = (f - riseFrom) / (riseTo - riseFrom)
-                    // Smoothstep, não t²: agora há trecho reto nas DUAS pontas,
-                    // e t² só é suave na de baixo — deixaria uma quina visível
-                    // no encontro com o platô do topo. t²(3−2t) tem derivada
-                    // zero nos dois extremos e emenda liso dos dois lados.
-                    return hMin + (h - hMin) * t * t * (3f - 2f * t)
+                    // Ease-out: t(2−t). Sobe rápido logo depois do joelho e vai
+                    // assentando até encostar no platô com derivada zero.
+                    //
+                    // Já foi smoothstep, t²(3−2t), e o resultado parecia
+                    // quebrado: como ele é achatado nas duas pontas, só ganhava
+                    // um quarto da altura no primeiro terço da faixa, e a barra
+                    // dava a impressão de só começar a subir lá pelos 5.000.
+                    // Com ease-out, metade da altura já veio aos ~4.900 — a
+                    // subida é percebida onde ela de fato começa.
+                    return hMin + (h - hMin) * t * (2f - t)
                 }
 
                 fun wedge(from: Float, to: Float) = Path().apply {
