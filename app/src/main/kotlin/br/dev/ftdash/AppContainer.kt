@@ -9,6 +9,7 @@ import br.dev.ftdash.data.SpeedFix
 import br.dev.ftdash.data.TelemetryRepository
 import br.dev.ftdash.data.UsbBusReport
 import br.dev.ftdash.data.UsbDiagnostics
+import br.dev.ftdash.data.UsbEventLog
 import br.dev.ftdash.data.UsbTelemetrySource
 import br.dev.ftdash.data.settings.SettingsStore
 import br.dev.ftdash.gearing.GearProfile
@@ -39,7 +40,14 @@ class AppContainer(
      * numa multimídia. Entra por toque longo na barra de status ou pela aba USB
      * da configuração.
      */
-    val usbSource = UsbTelemetrySource(appContext)
+    /**
+     * Registro do que acontece no USB. Fica no container porque a aba de
+     * diagnóstico o desenha e a fonte o alimenta — e ele precisa sobreviver à
+     * fonte ser recriada, senão perde justamente o evento da queda.
+     */
+    val usbEventLog = UsbEventLog(appContext)
+
+    val usbSource = UsbTelemetrySource(appContext, usbEventLog)
 
     val telemetryRepository = TelemetryRepository(
         scope = scope,

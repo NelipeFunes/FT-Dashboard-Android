@@ -44,6 +44,8 @@ import kotlinx.coroutines.flow.flowOn
  */
 class UsbTelemetrySource(
     private val context: Context,
+    /** Onde fica o registro do que aconteceu — ver [UsbEventLog]. */
+    private val log: UsbEventLog,
     /** Fallback para o caso do ZLP — ver ponto 2 do KDoc. */
     private val sendConfigAsSingleTransfer: Boolean = false,
 ) : TelemetrySource {
@@ -60,6 +62,7 @@ class UsbTelemetrySource(
         // o contador.
         var failures = 0
         var permissionRefused = false
+        var absentReported = false
 
         suspend fun backoff() {
             failures++
@@ -67,6 +70,8 @@ class UsbTelemetrySource(
                 .coerceAtMost(MAX_RECONNECT_INTERVAL_MS)
             delay(wait)
         }
+
+        log.add("fonte USB iniciada")
 
         while (true) {
             emit(TelemetryEvent.Status(SourceState.CONNECTING))
@@ -76,12 +81,30 @@ class UsbTelemetrySource(
                 // Reporta o que o barramento mostra, não só "não achei": é a
                 // diferença entre voltar do carro sabendo que a porta não faz
                 // host e voltar sem informação nenhuma.
-                emit(TelemetryEvent.Status(SourceState.ERROR, UsbDiagnostics.scan(context).summary))
+                val report = UsbDiagnostics.scan(context)
+                emit(TelemetryEvent.Status(SourceState.ERROR, report.summary))
+                // Só a primeira vez: a ECU sumida gera uma varredura por
+                // segundo, e 60 linhas iguais por minuto empurrariam para fora
+                // do log justamente o que interessa — o que houve antes de ela
+                // sumir.
+                if (!absentReported) {
+                    absentReported = true
+                    log.add("device ausente: ${report.summary}")
+                }
                 // O device sumiu: se voltar, é outra sessão e vale pedir
                 // permissão de novo.
                 permissionRefused = false
-                backoff()
+                // Sem backoff. Ler `deviceList` não toca no hardware, não
+                // gasta nada e não incomoda ninguém — e esperar 15 s para
+                // perceber que a ECU voltou é tempo de painel morto por
+                // economia que não economiza nada. O backoff existe para
+                // tentativa de conexão que falha, não para device ausente.
+                delay(ABSENT_RESCAN_INTERVAL_MS)
                 continue
+            }
+            if (absentReported) {
+                absentReported = false
+                log.add("device voltou ao barramento")
             }
             if (!manager.hasPermission(device)) {
                 if (permissionRefused) {
@@ -92,9 +115,11 @@ class UsbTelemetrySource(
                     continue
                 }
                 emit(TelemetryEvent.Status(SourceState.CONNECTING, "pedindo permissão de USB"))
+                log.add("pedindo permissão de USB")
                 if (!UsbPermission.request(context, device)) {
                     permissionRefused = true
                     emit(TelemetryEvent.Status(SourceState.ERROR, "permissão de USB negada"))
+                    log.add("permissão NEGADA")
                     backoff()
                     continue
                 }
@@ -103,24 +128,36 @@ class UsbTelemetrySource(
             val connection = manager.openDevice(device)
             if (connection == null) {
                 emit(TelemetryEvent.Status(SourceState.ERROR, "não consegui abrir o device"))
+                log.add("openDevice falhou (handle preso? sem permissão?)")
                 backoff()
                 continue
             }
 
             var connected = false
+            var session: Session? = null
             try {
-                val session = Session.open(device, connection)
+                session = Session.open(device, connection)
                 if (session == null) {
                     emit(TelemetryEvent.Status(SourceState.ERROR, "interface/endpoints não encontrados"))
+                    log.add("claimInterface/endpoints falharam")
                 } else {
                     connected = true
                     failures = 0
+                    log.add("conectado, iniciando handshake")
                     handshake(session)
                     emitFrames(session, manager)
                 }
             } catch (e: Exception) {
                 emit(TelemetryEvent.Status(SourceState.ERROR, e.message ?: e.javaClass.simpleName))
+                log.add("erro: ${e.javaClass.simpleName} ${e.message ?: ""}")
             } finally {
+                // Soltar a interface antes de fechar, sempre. O app Electron
+                // que serviu de base faz isso em todo caminho de saída, e o
+                // nosso não fazia: cada ciclo de reconexão deixava para trás
+                // uma interface reivindicada. Numa multimídia velha, é a
+                // receita para o controlador USB travar depois de algumas
+                // quedas e só voltar com o cabo na mão.
+                session?.release()
                 connection.close()
             }
 
@@ -203,6 +240,7 @@ class UsbTelemetrySource(
                 if (frames.isNotEmpty()) {
                     lastFrameMs = now
                     if (!streaming || degradedReported) {
+                        if (!streaming) log.add("streaming (1o frame em ${now - start}ms, ${frames[0].frameLen}B)")
                         streaming = true
                         degradedReported = false
                         emit(TelemetryEvent.Status(SourceState.STREAMING))
@@ -219,10 +257,22 @@ class UsbTelemetrySource(
             val limit = if (streaming) Ft450Protocol.STALL_TIMEOUT_MS else Ft450Protocol.FIRST_FRAME_TIMEOUT_MS
             if (byteSilence > limit) {
                 val stillThere = findDevice(manager) != null
-                emit(
-                    TelemetryEvent.Status(
-                        SourceState.STALLED,
-                        if (stillThere) "sem dados há ${byteSilence}ms" else "FT450 sumiu do barramento",
+                val why = if (stillThere) "sem dados há ${byteSilence}ms" else "FT450 sumiu do barramento"
+                emit(TelemetryEvent.Status(SourceState.STALLED, why))
+                // A linha que decide o diagnóstico da próxima ida ao carro:
+                // quanto durou a sessão, quantos frames vieram, quantos CRCs
+                // falharam e se o device ainda estava lá quando parou.
+                //
+                // "Ainda no barramento + zero crc" é ECU parando de mandar.
+                // "Sumiu do barramento" é queda de energia ou re-enumeração —
+                // e aí nenhum ajuste de timeout resolve.
+                log.add(
+                    "PAROU: %s | sessao %ds, %d frames, %d crcFail, %d resync".format(
+                        why,
+                        (now - start) / 1000,
+                        framer.framesOk,
+                        framer.crcFail,
+                        framer.resyncs,
                     )
                 )
                 return  // sai para o laço de reconexão
@@ -263,6 +313,12 @@ class UsbTelemetrySource(
         const val MAX_RECONNECT_INTERVAL_MS = 15_000L
 
         /**
+         * Com o device fora do barramento, varre neste ritmo fixo — sem
+         * backoff. A varredura é só uma leitura de lista em memória.
+         */
+        const val ABSENT_RESCAN_INTERVAL_MS = 1_000L
+
+        /**
          * Bytes chegando mas nenhum frame passando no CRC por este tempo já é
          * anormal o suficiente para avisar — sem derrubar a conexão.
          */
@@ -283,6 +339,11 @@ class UsbTelemetrySource(
 
         fun read(into: ByteArray, timeoutMs: Int): Int =
             connection.bulkTransfer(epIn, into, into.size, timeoutMs)
+
+        /** Melhor esforço: se já estiver solta, não há o que fazer nem o que reportar. */
+        fun release() {
+            runCatching { connection.releaseInterface(iface) }
+        }
 
         companion object {
             fun open(device: UsbDevice, connection: UsbDeviceConnection): Session? {

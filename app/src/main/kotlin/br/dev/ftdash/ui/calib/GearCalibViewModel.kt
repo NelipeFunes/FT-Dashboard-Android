@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.dev.ftdash.AppContainer
 import br.dev.ftdash.data.SourceKind
 import br.dev.ftdash.data.UsbBusReport
+import br.dev.ftdash.data.UsbEventLog
 import br.dev.ftdash.data.settings.RpmScaleMode
 import br.dev.ftdash.trip.FuelSetup
 import br.dev.ftdash.gearing.GearProfile
@@ -80,6 +81,9 @@ data class CalibUiState(
     val crcFail: Long = 0,
     val frameLen: Int = 0,
     val sourceKind: SourceKind = SourceKind.REPLAY,
+    /** Histórico com hora, mais recente primeiro — ver [br.dev.ftdash.data.UsbEventLog]. */
+    val usbLog: List<UsbEventLog.Entry> = emptyList(),
+    val usbLogPath: String? = null,
 
     val message: String? = null,
 )
@@ -133,6 +137,14 @@ class GearCalibViewModel(
                         ?: _state.value.manualShift,
                     manualMaxRpm = s.maxRpm.takeIf { it > 0 }?.toString()
                         ?: _state.value.manualMaxRpm,
+                )
+            }
+        }
+        viewModelScope.launch {
+            container.usbEventLog.entries.collect { entries ->
+                _state.value = _state.value.copy(
+                    usbLog = entries,
+                    usbLogPath = container.usbEventLog.path,
                 )
             }
         }

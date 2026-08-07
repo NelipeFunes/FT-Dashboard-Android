@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import br.dev.ftdash.data.UsbBusReport
 import br.dev.ftdash.data.settings.RpmScaleMode
+import br.dev.ftdash.ui.theme.Red500
 import br.dev.ftdash.ui.theme.Zinc600
 import br.dev.ftdash.gearing.GearProfile
 import br.dev.ftdash.gearing.RatioCapture
@@ -122,7 +123,15 @@ fun GearCalibScreen(
                 }
             }
             Box(Modifier.weight(0.45f)) {
-                RatioList(state.profile, onRemoveGear, onEditRatio)
+                // Na aba USB o painel da direita vira o histórico. A lista de
+                // relações não tem nada a ver com diagnóstico de barramento, e
+                // o log é justamente o que precisa de espaço para ser lido —
+                // ou fotografado — dentro do carro.
+                if (state.mode == CalibMode.USB) {
+                    UsbLogPanel(state)
+                } else {
+                    RatioList(state.profile, onRemoveGear, onEditRatio)
+                }
             }
         }
 
@@ -759,6 +768,67 @@ private fun statusColor(report: UsbBusReport) = when {
     report.ft450?.hasPermission == true -> Emerald500
     report.ft450 != null -> Amber500
     else -> Amber500
+}
+
+/**
+ * O que aconteceu no USB, com hora, mais recente em cima.
+ *
+ * O painel mostra só o agora, e o defeito que estamos caçando é uma sequência:
+ * conecta, transmite, cai. Quando alguém olha a tela, o momento que interessa
+ * já passou — e dentro do carro não há logcat. Aqui a sequência fica parada,
+ * pronta para ser fotografada com o celular no lugar do teste.
+ */
+@Composable
+private fun UsbLogPanel(state: CalibUiState) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Zinc900, RoundedCornerShape(4.dp))
+            .border(1.dp, Zinc800, RoundedCornerShape(4.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("HISTORICO DO USB", style = LabelStyle, color = Zinc400)
+
+        if (state.usbLog.isEmpty()) {
+            Text(
+                "Nada registrado ainda. Toque em USAR USB.",
+                style = NumberSmall,
+                color = Zinc500,
+            )
+        }
+
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            for (entry in state.usbLog) {
+                Row {
+                    Text(entry.clock, style = NumberSmall, color = Zinc500)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        entry.text,
+                        style = NumberSmall,
+                        // Só as linhas de queda e de erro ganham cor. Se tudo
+                        // fosse colorido, nada saltaria aos olhos.
+                        color = when {
+                            entry.text.startsWith("PAROU") -> Amber500
+                            entry.text.startsWith("erro") ||
+                                entry.text.contains("NEGADA") ||
+                                entry.text.contains("falh") -> Red500
+                            else -> Zinc100
+                        },
+                    )
+                }
+            }
+        }
+
+        state.usbLogPath?.let {
+            Text("Arquivo: $it", style = LabelStyle, color = Zinc600, maxLines = 2)
+        }
+    }
 }
 
 /** Lista final — a mesma para os dois modos, com a origem de cada razão à vista. */

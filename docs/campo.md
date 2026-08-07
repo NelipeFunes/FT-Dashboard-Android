@@ -59,6 +59,60 @@ O acesso era só por toque longo. Bom como atalho para quem já sabe, inútil pa
 
 ---
 
+## Teste 2 — 2026-08-06, versão 0.9.14
+
+**Não resolveu.** Relato: liga o carro, o app manda algumas informações e depois para. Depois disso a
+aba USB passa a mostrar **"barramento vazio"**.
+
+Isso muda o diagnóstico. "Barramento vazio" não é ruído derrubando CRC — é a FT450 **sumindo da lista de
+devices do Android**. Nenhum ajuste de timeout, de tolerância a CRC ou de handshake alcança esse
+cenário: não há com quem falar. A correção do teste 1 endereçou o problema errado, ou endereçou um
+problema real que escondia este.
+
+Duas causas possíveis, e elas pedem respostas diferentes:
+
+| hipótese | como se distingue |
+|---|---|
+| a ECU/porta cai e **volta**, e o app não reconecta | o log mostra "device voltou ao barramento" e depois falha ao abrir |
+| a porta USB da central **morre até replugar o cabo** | o log fica em "device ausente" para sempre, e replugar ressuscita |
+
+### Um defeito nosso, achado ao investigar
+
+`releaseInterface` **nunca era chamado**. O `UsbTelemetrySource` fechava a conexão sem soltar a
+interface reivindicada — em todo ciclo de reconexão. O app Electron que serviu de base solta em todo
+caminho de saída (`usbSource.ts:132` e `:719`); a porta Android não copiou isso.
+
+Não é comprovadamente a causa do relato, mas é exatamente o tipo de coisa que trava o controlador USB de
+uma central velha depois de algumas quedas seguidas — e o sintoma seria este: cai, e o device não volta
+mais até o cabo sair e entrar.
+
+Também corrigido: com o device ausente, o backoff crescia até 15 s entre varreduras. Varrer a lista de
+devices é uma leitura em memória, não toca no hardware — não havia o que economizar, e o custo era até
+15 s de painel morto depois que a ECU já tinha voltado. Agora a varredura de device ausente é fixa em
+1 s; o backoff ficou só para tentativa de conexão que falha.
+
+### O histórico de USB
+
+O motivo de o teste 1 e o teste 2 terem voltado sem resposta é o mesmo: **o painel só mostra o agora**,
+e o defeito é uma sequência. Quando alguém olha a tela, o instante que interessa já passou, e dentro do
+carro não existe logcat.
+
+A aba USB agora tem um histórico com hora, mais recente em cima, no painel da direita. Ele grava em
+`Android/data/br.dev.ftdash/files/usb-log.txt`, que sobrevive a fechar o app e à central desligar.
+
+A linha que decide tudo é a de queda:
+
+```
+PAROU: FT450 sumiu do barramento | sessao 47s, 812 frames, 3 crcFail, 1 resync
+```
+
+- **"sumiu do barramento"** → o device caiu; é energia ou re-enumeração, não protocolo.
+- **"sem dados há Nms"** com o device ainda presente → a ECU parou de mandar com o cabo vivo; aí sim é
+  handshake ou sessão.
+- **`crcFail` alto** → ruído elétrico; é o caso que justificaria o modo tolerante.
+
+---
+
 ## Fatos de hardware confirmados na engenharia reversa
 
 Coisas que **não** são bug e vão acontecer:
@@ -75,18 +129,24 @@ Coisas que **não** são bug e vão acontecer:
 
 ## Em aberto para o próximo teste
 
-**O mais importante: `B/s` e `crc` com o motor ligado.** Ficam na aba USB da configuração. São eles que
-distinguem os dois cenários:
+**Trazer o log.** Abrir CONFIG → USB depois da queda e fotografar o painel da direita, ou copiar
+`Android/data/br.dev.ftdash/files/usb-log.txt`. É a única coisa que importa desta vez — sem ele, a
+terceira ida ao carro volta igual às duas primeiras.
 
-| observação | diagnóstico |
-|---|---|
-| `crc` alto e subindo, `B/s` correndo | era a interação CRC × detecção de vivacidade — resolvido |
-| `crc` baixo e a conexão cai mesmo assim | reset de barramento de verdade; o que importa é voltar sozinha |
-| `B/s` zerado por muito tempo | problema elétrico ou de cabo, não de software |
+**A pergunta a responder:** depois de cair, a FT volta ao barramento sozinha? O log responde direto:
+"device voltou ao barramento" aparece ou não aparece.
 
-Se o `crc` vier altíssimo e o painel travar, o próximo passo é um **modo tolerante** que aceita frame
-sem CRC — exatamente o que o app de tuning faz, e que roda nesse carro há meses. Não foi feito ainda de
-propósito: colocar as duas mudanças juntas estragaria o experimento.
+- **Não volta nunca, e replugar o cabo resolve** → é a porta USB da central travando. O
+  `releaseInterface` que faltava é o suspeito; se voltar a acontecer mesmo com ele, não há saída por
+  software na porta atual.
+- **Volta e cai de novo em ciclo** → é energia. A porta provavelmente está no ACC e oscila com o
+  arranque, ou o cabo não segura corrente.
+- **Nunca sai do barramento e para de mandar dados** → aí sim é protocolo, e o alvo passa a ser o
+  handshake.
+
+Se o `crcFail` do log vier altíssimo, o próximo passo é um **modo tolerante** que aceita frame sem CRC —
+exatamente o que o app de tuning faz, e que roda nesse carro há meses. Não foi feito ainda de propósito:
+colocar as duas mudanças juntas estragaria o experimento.
 
 **Confirmar que a câmera de ré não é mais interrompida.**
 
